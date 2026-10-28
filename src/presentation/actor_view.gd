@@ -159,6 +159,10 @@ func _apply_pose(plane_pos: Vector2, height: float, facing: int, state: int) -> 
 func flash(color: Color = Color.WHITE, duration: float = FLASH_SECONDS) -> void:
     _flash_color = color
     _flash_left = maxf(duration, 0.0)
+    # 连着挨打时 _last_anim 已经是 hurt，_update_animation 会提前返回，
+    # 动画就停在最后一帧不动。每次挨打强制重播，受击才有「被打了一下」的反馈。
+    if _sprite != null and _last_anim == &"hurt":
+        _sprite.restart()
     if _sprite == null:
         return
     var shown: Color = _flash_color
@@ -308,7 +312,9 @@ func _update_hitbox(state: int) -> void:
     var active: bool = false
     if not _is_dead and runtime != null and runtime.action != null:
         var phase: int = runtime.action.attack_phase()
-        active = state == ActionState.ATTACK and phase == ATTACK_PHASE_ACTIVE
+        # 起手帧就打开：物理引擎要一帧才填重叠列表，等 ACTIVE 再开会永远慢一拍。
+        # 后摇立刻关掉，调试视图里只剩「真要打人的那几帧」。
+        active = state == ActionState.ATTACK and phase <= ATTACK_PHASE_ACTIVE
     _hitbox.set_active(active)
 
 func _on_broadphase_candidate(attacker_id: int, target_id: int) -> void:

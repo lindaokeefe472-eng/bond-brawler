@@ -11,12 +11,14 @@ var faction: StringName = GameConstants.FACTION_NEUTRAL
 var candidate_sink: Callable = Callable()
 
 var _active: bool = false
+var _shape: CollisionShape3D = null
 ## 一次 ACTIVE 窗口内每个目标只上报一次，避免持续重叠刷爆表现层。
 var _reported: Dictionary = {}
 
 func _ready() -> void:
     monitoring = false
     monitorable = false
+    _shape = get_node_or_null("CollisionShape3D") as CollisionShape3D
 
 func configure(p_actor_id: int, p_faction: StringName) -> void:
     actor_id = p_actor_id
@@ -33,12 +35,17 @@ func configure(p_actor_id: int, p_faction: StringName) -> void:
 
 ## 由 ActorView 在攻击 ACTIVE 窗口开关。开启瞬间立刻扫一次，
 ## 因为本帧的重叠可能早于下一次 _physics_process 才建立。
-## 只切换「是否上报」，不再碰 monitoring（见 configure 的说明）。
+## 切换「是否上报」，同时开关形状本身：
+##   - monitoring 常开，保证物理引擎一直在维护重叠列表；
+##   - 形状只在起手/判定帧启用，调试视图里不会一直挂着一个方框，
+##     也不会在待机时挡住鼠标拾取。
 func set_active(active: bool) -> void:
     if active == _active:
         return
     _active = active
     _reported.clear()
+    if _shape != null:
+        _shape.set_deferred("disabled", not active)
     if active:
         _scan()
 

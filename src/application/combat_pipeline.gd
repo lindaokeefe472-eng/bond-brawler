@@ -9,6 +9,13 @@ extends RefCounted
 const HIT_KIND_SKILL: StringName = &"skill"
 const MIN_DIRECTION_SQUARED: float = 0.0001
 
+## 硬直时长区间（秒）。分敌我是有意的：
+##   玩家要随时能操作 -> 短；敌人要给足受击反馈 -> 长到能播完 hurt 动画。
+const HITSTUN_PLAYER_BASE: float = 0.12
+const HITSTUN_PLAYER_CAP: float = 0.22
+const HITSTUN_ENEMY_BASE: float = 0.28
+const HITSTUN_ENEMY_CAP: float = 0.36
+
 ## 弹体类模板的伤害由弹体命中时再结算，激活瞬间只负责生成弹体。
 ## 若在这里直接结算，远程技能会变成「隔空瞬发」，和表现完全脱节。
 const PROJECTILE_TEMPLATES: Array[StringName] = [
@@ -220,9 +227,15 @@ func _apply_knockback(target: ActorRuntime, result: CombatDamageResult) -> void:
     var kb: Vector2 = result.knockback_vector
     if kb.length_squared() <= MIN_DIRECTION_SQUARED:
         return
-    # 硬直时长按击退强度给，短而有力：0.08~0.26 秒。
-    # 之前完全没接硬直，挨打只有位移没有停顿，打击反馈是断的。
-    var stun: float = clampf(0.08 + kb.length() * 0.02, 0.08, 0.26)
+    # 硬直分敌我：
+    #   玩家要随时能操作，所以短（0.10~0.20 秒），配合 0.35 秒免疫窗口，
+    #   被三个敌人围殴时最多也只锁 20% 的时间；
+    #   敌人要给出看得清的受击反馈，hurt 动画 4 帧 @12fps ≈ 0.33 秒，
+    #   所以给到 0.20~0.34 秒，正好让动画播完。
+    var is_player: bool = target.faction == GameConstants.FACTION_PLAYER
+    var base: float = HITSTUN_PLAYER_BASE if is_player else HITSTUN_ENEMY_BASE
+    var cap: float = HITSTUN_PLAYER_CAP if is_player else HITSTUN_ENEMY_CAP
+    var stun: float = clampf(base + kb.length() * 0.02, base, cap)
     target.action.apply_hitstun(stun, kb)
     # 霸体 / 无敌 / 硬直免疫时 apply_hitstun 会提前返回，此时仍然要施加击退。
     if not target.action.is_in_hurt():

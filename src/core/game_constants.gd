@@ -27,7 +27,7 @@ const MELEE_LANE_TOLERANCE: float = LANE_ALIGN_TOLERANCE
 const MELEE_HIT_HEIGHT: float = 1.6
 ## 判定盒比真实判定范围各方向再大一圈：保证宽相永远是窄相的超集，
 ## 宽相漏判只会让校验通道报警，绝不会让玩家少打一次。
-const HITBOX_MARGIN: float = 0.25
+const HITBOX_MARGIN: float = 0.06
 ## data/actions.json 的 basic_attack.range 是按原游戏角色体型定的（2.4）。
 ## 本项目角色统一 1.8 m 高，必须按比例换算，否则会出现「隔空打人」。
 const MELEE_RANGE_REFERENCE: float = 2.4

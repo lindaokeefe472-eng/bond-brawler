@@ -105,3 +105,32 @@ func test_melee_falls_back_to_full_scan_when_candidates_empty() -> void:
     var actors := {1: attacker, 2: target}
     assert_int(_pipeline().resolve_melee(attacker, actors, attacker.melee_config(), null).size()).is_equal(1)
     assert_int(_pipeline().resolve_melee(attacker, actors, attacker.melee_config(), []).size()).is_equal(1)
+
+## 回归：敌人的硬直要长到能播完受击动画（hurt 4 帧 @12fps ≈ 0.33 秒）。
+## 修之前只有 0.08~0.26 秒，实测受击动画只闪了 4 帧就没了。
+func test_enemy_hitstun_covers_hurt_animation() -> void:
+    var bus := DomainEventBus.new()
+    var attacker := _actor(1, GameConstants.FACTION_PLAYER, Vector2.ZERO, bus)
+    var target := _actor(2, GameConstants.FACTION_ENEMY, Vector2(1.0, 0.0), bus)
+    var cfg := {"range": GameConstants.MELEE_REACH, "power_ratio": 1.0, "knockback": 3.0, "half_arc": 0.0}
+    var results := _pipeline().resolve_melee(attacker, {1: attacker, 2: target}, cfg, [2])
+    assert_int(results.size()).is_equal(1)
+    assert_bool(target.action.is_in_hurt()).override_failure_message(
+        "命中后敌人必须进入硬直").is_true()
+    for i: int in 15:
+        target.action.tick(GameConstants.TICK_DELTA, LocoInputFrame.empty(), true)
+    assert_bool(target.action.is_in_hurt()).override_failure_message(
+        "敌人硬直不足 0.25 秒，受击动画会被直接截断").is_true()
+
+## 玩家的硬直必须短，否则被围殴时完全失去操作。
+func test_player_hitstun_is_shorter_than_enemy() -> void:
+    var bus := DomainEventBus.new()
+    var attacker := _actor(1, GameConstants.FACTION_ENEMY, Vector2.ZERO, bus)
+    var target := _actor(2, GameConstants.FACTION_PLAYER, Vector2(1.0, 0.0), bus)
+    var cfg := {"range": GameConstants.MELEE_REACH, "power_ratio": 1.0, "knockback": 3.0, "half_arc": 0.0}
+    var results := _pipeline().resolve_melee(attacker, {1: attacker, 2: target}, cfg, [2])
+    assert_int(results.size()).is_equal(1)
+    for i: int in 14:
+        target.action.tick(GameConstants.TICK_DELTA, LocoInputFrame.empty(), true)
+    assert_bool(target.action.is_in_hurt()).override_failure_message(
+        "玩家硬直超过 0.23 秒，会明显影响操作手感").is_false()
