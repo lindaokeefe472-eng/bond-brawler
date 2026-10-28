@@ -183,6 +183,17 @@ func _route_effect_event(event: DomainEvent, actors: Dictionary, caster: ActorRu
         SkillEffect.EVT_BUFF_APPLIED:
             _apply_buff(payload, actors)
             _emit(event)
+        SkillEffect.EVT_KNOCKBACK:
+            # 之前这个事件没有任何订阅者，SkillKnockbackEffect 等于空转：
+            # 带击退的技能（area_burst / dash_attack）打上去只掉血、不位移。
+            var kb_target: ActorRuntime = actors.get(int(payload.get("target_id", 0)), null)
+            if kb_target != null and kb_target.is_alive():
+                var raw_dir: Variant = payload.get("direction", Vector2.ZERO)
+                var dir: Vector2 = raw_dir if raw_dir is Vector2 else Vector2.ZERO
+                if dir.length_squared() < 0.0001:
+                    dir = Vector2(float(caster.facing), 0.0)
+                kb_target.action.set_knockback(dir.normalized() * float(payload.get("strength", 0.0)))
+            _emit(event)
         _:
             _emit(event)
 

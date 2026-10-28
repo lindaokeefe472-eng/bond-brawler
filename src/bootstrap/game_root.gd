@@ -273,6 +273,14 @@ func _shake_for(hit_kind: StringName, is_crit: bool) -> float:
 			return GameConstants.SHAKE_HEAVY
 	return GameConstants.SHAKE_MEDIUM if is_crit else GameConstants.SHAKE_LIGHT
 
+## F3 切换碰撞形状调试渲染：判定盒、受击盒、角色胶囊都会画出来。
+## 用它核对「看到的范围」和「打得到的范围」是否一致。
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F3:
+		var tree: SceneTree = get_tree()
+		tree.debug_collisions_hint = not tree.debug_collisions_hint
+		print("[debug] 碰撞形状显示: %s" % str(tree.debug_collisions_hint))
+
 func _exit_tree() -> void:
 	# 组合根被释放时一定解开时间冻结，否则编辑器/下一局会一直停住。
 	if Engine.time_scale <= 0.0:

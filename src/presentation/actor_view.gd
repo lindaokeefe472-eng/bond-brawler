@@ -312,9 +312,11 @@ func _update_hitbox(state: int) -> void:
     var active: bool = false
     if not _is_dead and runtime != null and runtime.action != null:
         var phase: int = runtime.action.attack_phase()
-        # 起手帧就打开：物理引擎要一帧才填重叠列表，等 ACTIVE 再开会永远慢一拍。
-        # 后摇立刻关掉，调试视图里只剩「真要打人的那几帧」。
-        active = state == ActionState.ATTACK and phase <= ATTACK_PHASE_ACTIVE
+        # 只在判定帧打开。起手帧就打开的话，剑还收着、判定盒已经伸到 1.45 m，
+        # 看起来就是「多了一把刀的距离」。后摇同理立刻关掉。
+        # 代价：ACTIVE 首帧的重叠列表可能还没填好，宽相候选为空 ——
+        # resolve_melee 遇到空候选会退化为全量扫描，所以不会漏伤害。
+        active = state == ActionState.ATTACK and phase == ATTACK_PHASE_ACTIVE
     _hitbox.set_active(active)
 
 func _on_broadphase_candidate(attacker_id: int, target_id: int) -> void:
