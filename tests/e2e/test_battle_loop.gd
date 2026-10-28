@@ -11,7 +11,8 @@ func before(_do_skip := not FileAccess.file_exists("res://data/skills.json"),
 
 const STEP: float = GameConstants.TICK_DELTA
 const PLAYER_SPAWN := Vector2(0.0, 0.0)
-const ENEMY_SPAWN := Vector2(1.6, 0.0)
+## 1.2 m：落在 GameConstants.MELEE_REACH（1.45）之内，普攻才打得到。
+const ENEMY_SPAWN := Vector2(1.2, 0.0)
 
 var _app: CompositionRoot = null
 var _session: BattleSession = null
@@ -47,7 +48,7 @@ func _spec(faction: StringName, pos: Vector2, hp: float) -> Dictionary:
         "stats": {"max_hp": hp, "battle_hp": hp, "attack": 10.0, "defense": 0.0, "types": []},
         "skills": [],
         "brain_profile": null,
-        "melee": {"range": 2.4, "power_ratio": 1.0, "knockback": 0.0, "half_arc": 0.0},
+        "melee": {"range": GameConstants.MELEE_REACH, "power_ratio": 1.0, "knockback": 0.0, "half_arc": 0.0},
     }
 
 func _frame(attack: bool = false, move: Vector2 = Vector2.ZERO) -> LocoInputFrame:
@@ -73,7 +74,7 @@ func test_attack_off_lane_misses() -> void:
     # 注意：不能事后改 plane_pos —— 动作机每帧都会用自身状态重写它。
     # 必须一开始就生成在纵深带外，这才是真实场景（敌人站在另一条 lane 上）。
     var far_id: int = _session.spawn_actor(
-        _spec(GameConstants.FACTION_ENEMY, Vector2(1.6, 2.0), 100.0))
+        _spec(GameConstants.FACTION_ENEMY, Vector2(1.2, 2.0), 100.0))
     var far: ActorRuntime = _session.get_actor(far_id)
     var before: float = far.stats.current_hp
     _run(40, _frame(true))
@@ -178,3 +179,17 @@ func test_player_never_locked_out_longer_than_half_a_second() -> void:
             worst = maxf(worst, streak)
     assert_float(worst).override_failure_message(
         "玩家最长被锁 %.2f 秒，超过 0.6 秒说明有控制效果在锁动作" % worst).is_less(0.6)
+
+## 回归：普攻不能打到 reach 之外。修之前判定盒写死在 .tscn（2.4 m），
+## 领域层却按数据表算，实测出现过 2.67 m 的「隔空命中」。
+func test_melee_cannot_reach_beyond_configured_range() -> void:
+    var reach: float = float(_session.get_actor(_player_id).melee_config().get("range", 0.0))
+    var far_id: int = _session.spawn_actor(
+        _spec(GameConstants.FACTION_ENEMY, Vector2(reach + 0.6, 0.0), 100.0))
+    var far: ActorRuntime = _session.get_actor(far_id)
+    _run(40, _frame(true))
+    assert_float(far.stats.current_hp).override_failure_message(
+        "打到了 %.2f m 外的目标（reach=%.2f），判定范围与视觉脱节" % [reach + 0.6, reach]
+    ).is_equal(100.0)
+    # 同一招在 reach 内必须命中，证明不是根本没打出去
+    assert_float(_session.get_actor(_enemy_id).stats.current_hp).is_less(100.0)

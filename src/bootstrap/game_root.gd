@@ -193,7 +193,13 @@ func _physics_process(delta: float) -> void:
 		var inputs: Dictionary = {}
 		if _player_id > 0:
 			inputs[_player_id] = _input.poll()
-		_session.tick(GameConstants.TICK_DELTA, inputs)
+		# 宽相提示：每个角色的攻击盒本帧看到了谁；空数组时领域层退化为全量扫描。
+		var broadphase: Dictionary = {}
+		for key: Variant in _views.keys():
+			var view: ActorView = _views[key]
+			if view != null and is_instance_valid(view):
+				broadphase[key] = view.consume_candidates()
+		_session.tick(GameConstants.TICK_DELTA, inputs, broadphase)
 		_sync_views()
 
 func _sync_views() -> void:

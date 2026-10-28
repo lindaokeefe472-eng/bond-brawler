@@ -19,6 +19,20 @@ const GROUND_Y: float = 0.0
 ## 每个 sprite 帧对应的世界高度（米），100px 图集 -> 1.8m 身高。
 const PIXELS_PER_METER: float = 100.0 / 1.8
 
+# ---------------------------------------------------------------- 近战判定几何
+## 角色身高 1.8 m、身位半径 0.42 m；一把长剑从身体中心算起约 1.45 m。
+## 这三个值是「看到的剑」与「打得到的范围」的唯一来源，判定盒也由它们推导。
+const MELEE_REACH: float = 1.45
+const MELEE_LANE_TOLERANCE: float = LANE_ALIGN_TOLERANCE
+const MELEE_HIT_HEIGHT: float = 1.6
+## 判定盒比真实判定范围各方向再大一圈：保证宽相永远是窄相的超集，
+## 宽相漏判只会让校验通道报警，绝不会让玩家少打一次。
+const HITBOX_MARGIN: float = 0.25
+## data/actions.json 的 basic_attack.range 是按原游戏角色体型定的（2.4）。
+## 本项目角色统一 1.8 m 高，必须按比例换算，否则会出现「隔空打人」。
+const MELEE_RANGE_REFERENCE: float = 2.4
+const MELEE_RANGE_SCALE: float = MELEE_REACH / MELEE_RANGE_REFERENCE
+
 # ---------------------------------------------------------------- 时间
 ## 固定逻辑步长：领域层所有 tick 都以它为单位推进，保证可重放。
 const TICK_RATE: int = 60

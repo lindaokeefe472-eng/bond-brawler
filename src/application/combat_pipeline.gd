@@ -93,8 +93,12 @@ func skill_targets(caster_id: int, origin: Vector2, facing: int, hitbox: Diction
 # ------------------------------------------------------------------ 普攻
 ## 普攻窄相：PlaneMath.in_cone 自带纵深对齐，因此不需要物理碰撞体参与。
 ## config 来自 ActorRuntime.melee_config()，数值不在这里硬编码。
+## candidate_ids 是宽相（Area3D）给出的「可能命中」提示。
+##   null / 空数组 -> 不做过滤，全量扫描（headless 测试与物理未就绪时的退化路径）。
+##   非空 -> 只结算其中的目标。判定盒由近战参数推导且各方向加了 HITBOX_MARGIN，
+##   所以它是窄相的严格超集，过滤只会省掉无用的遍历，不会漏掉本该命中的目标。
 func resolve_melee(attacker: ActorRuntime, actors: Dictionary,
-        config: Dictionary) -> Array[CombatDamageResult]:
+        config: Dictionary, candidate_ids: Variant = null) -> Array[CombatDamageResult]:
     var results: Array[CombatDamageResult] = []
     if attacker == null or not attacker.is_alive():
         return results
@@ -113,6 +117,8 @@ func resolve_melee(attacker: ActorRuntime, actors: Dictionary,
         if target == null or target.id == attacker.id or not target.is_alive():
             continue
         if target.faction == attacker.faction:
+            continue
+        if candidate_ids is Array and not (candidate_ids as Array).is_empty()                 and not (candidate_ids as Array).has(target.id):
             continue
         if not PlaneMath.in_cone(attacker.plane_pos, attacker.facing, target.plane_pos, reach, half_arc):
             continue

@@ -58,3 +58,39 @@ func test_enemies_damage_idle_player_in_scene() -> void:
     var after: float = session.get_actor(player_id).stats.current_hp
     assert_float(after).override_failure_message(
         "玩家挂机 6 秒后血量没有下降，说明 AI 推进或命中链路在场景层断了").is_less(before)
+
+## 宽相必须真的在报候选，否则 Area3D 就是摆设。
+## 回归：判定盒的尺寸与位置必须由近战参数推导，和窄相同源。
+## 修之前形状写死在 actor_view.tscn（2.4 x 1.6 x 1.8），领域层用另一套 range，
+## 结果出现 2.67 m 的「隔空命中」。
+func test_hitbox_geometry_matches_melee_config() -> void:
+    var runner := _boot()
+    await runner.simulate_frames(SPAWN_FRAMES)
+    var scene: Node = runner.scene()
+    var views: Dictionary = scene.get("_views")
+    var pid: int = int(scene.get("_player_id"))
+    var view: Node = views.get(pid, null)
+    assert_object(view).is_not_null()
+
+    var hitbox: Area3D = view.get_node_or_null("Hitbox") as Area3D
+    var shape_node: CollisionShape3D = hitbox.get_node_or_null("CollisionShape3D") as CollisionShape3D
+    assert_object(shape_node).is_not_null()
+    var box: BoxShape3D = shape_node.shape as BoxShape3D
+    assert_object(box).is_not_null()
+
+    var cfg: Dictionary = view.get("runtime").melee_config()
+    var reach: float = float(cfg.get("range", 0.0))
+    var lane: float = float(cfg.get("lane_tolerance", 0.0))
+    var height: float = float(cfg.get("hit_height", 0.0))
+    var margin: float = GameConstants.HITBOX_MARGIN
+    var body: float = GameConstants.BODY_RADIUS
+
+    assert_float(box.size.x).override_failure_message("x 轴尺寸应覆盖身后 body 到身前 reach").is_equal_approx(
+            reach + body + margin * 2.0, 0.01)
+    assert_float(box.size.z).override_failure_message("z 轴尺寸应覆盖纵深容差").is_equal_approx(
+            lane * 2.0 + margin * 2.0, 0.01)
+    assert_float(box.size.y).override_failure_message("y 轴尺寸应覆盖命中高度").is_equal_approx(
+            height + margin * 2.0, 0.01)
+    # 盒子前沿 = reach + margin：再多就「隔空打人」，再少就漏判
+    assert_float(hitbox.position.x + box.size.x * 0.5).override_failure_message(
+            "判定盒前沿与 reach 不一致，视觉与判定会脱节").is_equal_approx(reach + margin, 0.01)

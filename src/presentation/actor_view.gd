@@ -16,7 +16,8 @@ const DEATH_FADE_SECONDS: float = 0.55
 const DEATH_HOLD_SECONDS: float = 0.8
 const FLASH_SECONDS: float = 0.09
 ## 攻击盒放在身体前方多远：宽相只需要覆盖「可能够到」的区域，窄相才是权威。
-const HITBOX_FORWARD_OFFSET: float = 1.2
+## 判定盒的碰撞形状节点名（Hitbox 的子节点）。
+const HITBOX_SHAPE_NODE: String = "CollisionShape3D"
 ## 跳字从头顶多高处冒出。
 const DAMAGE_NUMBER_HEIGHT: float = 1.9
 
@@ -58,6 +59,9 @@ var _death_time: float = 0.0
 var _death_fading: bool = false
 var _death_alpha: float = 1.0
 var _candidates: Array[int] = []
+## 判定盒相对角色原点的偏移，由近战参数推导（见 _apply_hitbox_geometry）。
+var _hitbox_center_x: float = 0.0
+var _hitbox_height: float = 0.8
 
 func _ready() -> void:
     _sprite = get_node_or_null(SPRITE_NODE) as SpriteBillboard
@@ -97,7 +101,33 @@ func bind(p_runtime: ActorRuntime, character_id: String, manifest: Dictionary) -
         _hurtbox.configure(actor_id, faction)
     if _hitbox != null:
         _hitbox.configure(actor_id, faction)
+    _apply_hitbox_geometry()
     sync_from_runtime()
+
+## 判定盒的尺寸与位置全部由 ActorRuntime 的近战参数推导，和窄相同源。
+##
+## 之前形状写死在 actor_view.tscn 里（2.4 x 1.6 x 1.8），领域层却用
+## range=2.4 / lane=0.85 另一套数，两边必然对不上：实测出现过 2.67 m 的
+## 「隔空命中」。现在盒子由 reach / lane_tolerance / hit_height 算出来，
+## 再各方向加一圈 HITBOX_MARGIN，保证宽相是窄相的严格超集。
+func _apply_hitbox_geometry() -> void:
+    if _hitbox == null or runtime == null:
+        return
+    var shape_node: CollisionShape3D = _hitbox.get_node_or_null(HITBOX_SHAPE_NODE) as CollisionShape3D
+    if shape_node == null:
+        return
+    var cfg: Dictionary = runtime.melee_config()
+    var reach: float = maxf(float(cfg.get("range", GameConstants.MELEE_REACH)), 0.0)
+    var lane: float = maxf(float(cfg.get("lane_tolerance", GameConstants.MELEE_LANE_TOLERANCE)), 0.0)
+    var height: float = maxf(float(cfg.get("hit_height", GameConstants.MELEE_HIT_HEIGHT)), 0.1)
+    var margin: float = GameConstants.HITBOX_MARGIN
+    var body: float = GameConstants.BODY_RADIUS
+    var box := BoxShape3D.new()
+    # x：从身后 body 到身前 reach；z：纵深 ±lane；y：命中高度。
+    box.size = Vector3(reach + body + margin * 2.0, height + margin * 2.0, lane * 2.0 + margin * 2.0)
+    shape_node.shape = box
+    _hitbox_center_x = (reach - body) * 0.5
+    _hitbox_height = height * 0.5
 
 ## 从领域运行时读回本帧结果。GameRoot 在每次 BattleSession.tick 之后调用。
 func sync_from_runtime() -> void:
@@ -274,7 +304,7 @@ func _fallbacks_for(anim_name: StringName) -> Array:
 func _update_hitbox(state: int) -> void:
     if _hitbox == null:
         return
-    _hitbox.position.x = HITBOX_FORWARD_OFFSET * float(_facing)
+    _hitbox.position = Vector3(_hitbox_center_x * float(_facing), _hitbox_height, 0.0)
     var active: bool = false
     if not _is_dead and runtime != null and runtime.action != null:
         var phase: int = runtime.action.attack_phase()

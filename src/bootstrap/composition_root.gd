@@ -71,8 +71,11 @@ func _read_melee_config() -> Dictionary:
     elif raw_knockback is float or raw_knockback is int:
         knockback = float(raw_knockback)
 
+    # 原游戏的 range 是按它自己的角色体型定的，本项目角色统一 1.8 m，
+    # 直接照搬会出现「隔空打人」（实测命中距离到过 2.67 m）。
+    var raw_range: float = float(basic.get("range", GameConstants.MELEE_RANGE_REFERENCE))
     return {
-        "range": maxf(float(basic.get("range", ActorRuntime.MELEE_RANGE_DEFAULT)), 0.0),
+        "range": clampf(raw_range * GameConstants.MELEE_RANGE_SCALE, 0.8, 2.2),
         "power_ratio": ActorRuntime.MELEE_POWER_RATIO_DEFAULT,
         "knockback": maxf(knockback, 0.0),
     }

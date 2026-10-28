@@ -74,3 +74,34 @@ func test_resolve_melee_only_hits_aligned_target() -> void:
     assert_int(results.size()).is_equal(1)
     assert_float(aligned.stats.current_hp).is_equal_approx(90.0, 0.0001)
     assert_float(misaligned.stats.current_hp).is_equal_approx(100.0, 0.0001)
+
+# ---------------------------------------------------------------- 宽相候选过滤
+func _pipeline() -> CombatPipeline:
+    return CombatPipeline.new(DomainEventBus.new(), _rng())
+
+func test_melee_accepts_target_inside_candidates() -> void:
+    var bus := DomainEventBus.new()
+    var attacker := _actor(1, GameConstants.FACTION_PLAYER, Vector2.ZERO, bus)
+    var target := _actor(2, GameConstants.FACTION_ENEMY, Vector2(1.0, 0.0), bus)
+    var results := _pipeline().resolve_melee(attacker, {1: attacker, 2: target},
+            attacker.melee_config(), [2])
+    assert_int(results.size()).is_equal(1)
+
+func test_melee_skips_target_outside_candidates() -> void:
+    # 宽相说「没看到你」，就不结算——这是碰撞箱真正生效的地方。
+    var bus := DomainEventBus.new()
+    var attacker := _actor(1, GameConstants.FACTION_PLAYER, Vector2.ZERO, bus)
+    var target := _actor(2, GameConstants.FACTION_ENEMY, Vector2(1.0, 0.0), bus)
+    var results := _pipeline().resolve_melee(attacker, {1: attacker, 2: target},
+            attacker.melee_config(), [3])
+    assert_int(results.size()).is_equal(0)
+    assert_float(target.stats.current_hp).is_equal(100.0)
+
+func test_melee_falls_back_to_full_scan_when_candidates_empty() -> void:
+    # 没有宽相数据（headless / 物理未就绪）时必须退化为全量扫描，不能漏伤害。
+    var bus := DomainEventBus.new()
+    var attacker := _actor(1, GameConstants.FACTION_PLAYER, Vector2.ZERO, bus)
+    var target := _actor(2, GameConstants.FACTION_ENEMY, Vector2(1.0, 0.0), bus)
+    var actors := {1: attacker, 2: target}
+    assert_int(_pipeline().resolve_melee(attacker, actors, attacker.melee_config(), null).size()).is_equal(1)
+    assert_int(_pipeline().resolve_melee(attacker, actors, attacker.melee_config(), []).size()).is_equal(1)

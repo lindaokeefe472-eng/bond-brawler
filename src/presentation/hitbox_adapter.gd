@@ -25,32 +25,32 @@ func configure(p_actor_id: int, p_faction: StringName) -> void:
     collision_mask = CollisionLayers.hitbox_mask_for(p_faction)
     _active = false
     _reported.clear()
-    monitoring = false
+    # 常开扫描。之前是在 ACTIVE 帧才打开 monitoring，但物理引擎要到下一帧才填重叠列表，
+    # 而领域层在 ACTIVE 首帧就结算完了 —— 那一刻重叠永远是空的，宽相等于没开。
+    # 常开之后重叠列表一直是最新的，只在「要不要上报」上按相位过滤。
+    monitoring = true
     monitorable = false
 
 ## 由 ActorView 在攻击 ACTIVE 窗口开关。开启瞬间立刻扫一次，
 ## 因为本帧的重叠可能早于下一次 _physics_process 才建立。
+## 只切换「是否上报」，不再碰 monitoring（见 configure 的说明）。
 func set_active(active: bool) -> void:
     if active == _active:
-        if active:
-            _scan()
         return
     _active = active
-    monitoring = active
+    _reported.clear()
     if active:
-        _reported.clear()
         _scan()
-    else:
-        _reported.clear()
 
 func is_active() -> bool:
     return _active
 
 func _physics_process(_delta: float) -> void:
-    if _active:
-        _scan()
+    _scan()
 
 func _scan() -> void:
+    if not _active or not monitoring:
+        return
     for area: Area3D in get_overlapping_areas():
         if not (area is HurtboxAdapter):
             continue

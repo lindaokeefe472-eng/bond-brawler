@@ -24,6 +24,8 @@ var _bus: DomainEventBus = null
 var _rng: IRng = null
 var _calculator: CombatDamageCalculator = null
 var _pipeline: CombatPipeline = null
+## 本帧由宽相（Area3D）给出的候选：{attacker_id: Array[int]}。空字典 = 不做过滤。
+var _broadphase: Dictionary = {}
 var _waves: StageWaveSpawner = null
 var _species: Dictionary = {}
 
@@ -104,11 +106,14 @@ func intent_for(actor_id: int) -> AiIntent:
 # ------------------------------------------------------------------ 主循环
 ## 固定顺序：玩家输入 -> 动作机 -> AI 决策 -> 技能相位 -> 命中结算 -> 状态结算 -> 波次。
 ## 顺序本身就是契约：AI 在动作机之后决策，所以意图下一帧才生效，不会和玩家抢同一帧的输入。
-func tick(dt: float, inputs: Dictionary = {}) -> void:
+## broadphase: {attacker_id: Array[int]}，由表现层的 Area3D 宽相提供。
+## 不传时退化为全量扫描，领域层不依赖物理是否存在。
+func tick(dt: float, inputs: Dictionary = {}, broadphase: Dictionary = {}) -> void:
     var step: float = maxf(dt, 0.0)
     if step <= 0.0:
         return
     _time += step
+    _broadphase = broadphase
     var ids: Array[int] = actor_ids()
 
     # 1. 玩家输入：显式输入优先；AI 角色沿用上一帧决策产出的输入。
@@ -234,7 +239,8 @@ func _resolve_hits() -> void:
         if not activation.is_empty():
             _pipeline.resolve_skill(activation, _actors)
         if actor.consume_attack_activation():
-            _pipeline.resolve_melee(actor, _actors, actor.melee_config())
+            _pipeline.resolve_melee(actor, _actors, actor.melee_config(),
+                    _broadphase.get(actor.id, null))
 
 # ------------------------------------------------------------------ 波次
 func _tick_waves(dt: float) -> void:

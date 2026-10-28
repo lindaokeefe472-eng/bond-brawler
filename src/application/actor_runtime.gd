@@ -17,7 +17,7 @@ const STAMINA_REGEN_DELAY: float = 0.4
 
 # ---------------------------------------------------------------- 普攻默认值
 ## 来自 data/actions.json 的 basic_attack 段：威力由 attack 折算，射程 2.4。
-const MELEE_RANGE_DEFAULT: float = 2.4
+const MELEE_RANGE_DEFAULT: float = GameConstants.MELEE_REACH
 const MELEE_POWER_RATIO_DEFAULT: float = 1.0
 const MELEE_KNOCKBACK_DEFAULT: float = 0.65
 const MELEE_HALF_ARC_DEFAULT: float = 0.0
@@ -339,6 +339,9 @@ func melee_config() -> Dictionary:
         "power_ratio": float(_melee.get("power_ratio", MELEE_POWER_RATIO_DEFAULT)),
         "knockback": maxf(float(_melee.get("knockback", MELEE_KNOCKBACK_DEFAULT)), 0.0),
         "half_arc": maxf(float(_melee.get("half_arc", MELEE_HALF_ARC_DEFAULT)), 0.0),
+        # 判定盒用的几何：与窄相同源，保证「看到的就是打得到的」。
+        "lane_tolerance": maxf(float(_melee.get("lane_tolerance", GameConstants.MELEE_LANE_TOLERANCE)), 0.0),
+        "hit_height": maxf(float(_melee.get("hit_height", GameConstants.MELEE_HIT_HEIGHT)), 0.1),
         "damage_type": StringName(str(_melee.get("damage_type", "neutral"))),
         "hit_kind": HIT_KIND_LIGHT,
     }
