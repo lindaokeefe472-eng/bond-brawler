@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="20" fill="#1e2230"/>
+  <rect x="8" y="96" width="112" height="8" rx="4" fill="#3a4055"/>
+  <!-- 剑 -->
+  <path d="M64 18 L72 30 L72 78 L56 78 L56 30 Z" fill="#cdd6e6"/>
+  <rect x="44" y="78" width="40" height="7" rx="3" fill="#c8a24a"/>
+  <rect x="59" y="85" width="10" height="22" rx="4" fill="#8a5a32"/>
+  <!-- 斩击轨迹 -->
+  <path d="M92 34 q16 18 0 36" stroke="#e06a5a" stroke-width="5" fill="none" stroke-linecap="round"/>
+</svg>

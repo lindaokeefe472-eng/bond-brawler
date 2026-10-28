@@ -1,0 +1,11 @@
+# 统一换行：Godot 的 .gd/.tscn 用 LF，Windows 上也不会被改成 CRLF
+* text=auto eol=lf
+
+# 二进制资源不做换行转换、不做 diff
+*.png binary
+*.jpg binary
+*.aseprite binary
+*.ogg binary
+*.wav binary
+*.ttf binary
+*.otf binary

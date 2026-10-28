@@ -1,0 +1,26 @@
+# Godot
+.godot/
+*.translation
+export.cfg
+export_presets.cfg
+
+# GdUnit4 报告
+reports/
+
+# 构建产物
+build/
+*.pck
+*.exe
+*.dll
+
+# 编辑器
+.vscode/
+.idea/
+*.tmp
+
+# ---------------------------------------------------------------- 不随仓库分发
+# 版权原因（详见 README「数据与素材」）：
+#   data/          数值来自《宝可梦羁绊之旅》的解包还原，仅限本地研究
+#   assets/sprites 角色图集来自第三方素材包，再分发条款不明
+data/
+assets/sprites/

@@ -1,0 +1,92 @@
+# Bond Brawler · 项目须知
+
+2.5D 横版清版动作游戏（Castle Crashers 式）。Godot 4.7 / GDScript。
+六边形架构：领域层纯 `RefCounted`，引擎只做适配器。
+
+## 先读这三份
+
+1. `docs/ARCHITECTURE.md` —— 依赖方向、上下文边界、**接口契约**
+2. `docs/CONVENTIONS.md` —— 命名、缩进、并行开发的目录所有权
+3. `ASSET_SPEC.md` —— 素材尺寸、归一化规则、动画帧表
+4. `docs/testing.md` —— GdUnit4 用法、断言表、分层纪律
+
+## 常用命令
+
+```bash
+# 跑测试（GdUnit4 6.2.2，headless，带文件锁可并发）—— 全量
+bash tools/test.sh
+# 只跑某个上下文
+bash tools/test.sh res://tests/unit/combat
+
+# 架构约束检查
+python -I tools/check_architecture.py
+
+# GDScript 静态检查（编辑器 Errors 面板里的那几类噪音警告）
+python -I tools/lint_gdscript.py
+
+# 新增脚本后刷新 class_name 缓存（tools/test.sh 已内置）
+& "D:\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --headless --path . --import
+
+# 跑一段无界面对局，打印血量/位置
+& "D:\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --headless --path . --script res://tools/sim_check.gd
+
+# 截一张运行画面到 docs/screenshot.png
+& "D:\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --path . --script res://tools/capture.gd
+
+# 素材：从原始包重建图集清单 / 归一化 / 重新生成 ASSET_SPEC
+python tools/build_asset_manifest.py "<Tiny RPG pack>/Characters(100x100)" assets/sprites/characters
+python tools/normalize_sprites.py
+python -I tools/gen_asset_spec.py
+```
+
+## 硬规则（违反即返工）
+
+- 领域层（`src/*/domain/`）不得出现 `Node` / `SceneTree` / `Engine` / `Input` / `Time` / `Area3D` / `CharacterBody3D`。
+- 伤害数字只由领域层产生；`Area3D` 只做宽相。
+- 新增领域逻辑必须带单元测试，`tools/test.sh` 必须保持退出码 0。
+- 数值不得硬编码，放 `data/` 或 `GameConstants`。
+- 只在 `src/bootstrap/` 里 `new` 具体实现（`CompositionRoot` 装配，`GameRoot` 消费）。
+- 4 空格缩进；浮点用 `assert_almost_eq`，`Vector2` 分量是 32 位。
+
+## 踩过的坑（别重复踩）
+
+1. **素材留白**：原始图集角色只占 100x100 画布的 20~30 px。必须跑 `normalize_sprites.py`，
+   否则角色只有 0.4 m 高。新增角色后要重跑。
+2. **Sprite3D offset 方向**：`offset.y` 正方向与世界 Y 同向（向上）。写反角色会整只埋进地面。
+3. **背景板 Z**：相机在 +Z 朝 -Z 看，背景板必须在 `LANE_MIN` 之后（`BACKDROP_Z = -4.5`），
+   否则整块背景把角色挡住。
+4. **Vector2 是 32 位**：和 `float` 常量用 `==` 比较会失败。
+5. **测试串行**：多进程同时 `--import` 会打架，统一走 `tools/test.sh`（目录锁）。
+6. **GdUnit4 拒绝 headless**：必须加 `--ignoreHeadlessMode`（`tools/test.sh` 已内置）。
+   它这么做是因为 headless 下 Godot 不传输 `InputEvent`；我们的测试直接喂
+   `LocoInputFrame`，不走真实输入，所以不受影响。
+7. **浮点断言**：GdUnit4 的 `is_equal` 对 float 是精确比较，浮点一律用
+   `assert_float(x).is_equal_approx(y, eps)`。
+8. **分析器警告查不到**：`UNUSED_PARAMETER` / `SHADOWED_VARIABLE` 这类警告只在
+   编辑器 Errors 面板里显示，命令行 `--import` 不会打印（脚本缓存没失效就不重编译）。
+   所以用 `python -I tools/lint_gdscript.py` 兜底，提交前跑一遍。
+9. **类缓存**：删掉 `.godot/` 后直接跑游戏会报一堆 "Identifier XXX not declared"，
+   因为 `global_script_class_cache.cfg` 还没生成。先 `--import` 再跑。
+
+## 控制效果语义（踩过坑，别再改回去）
+
+| 状态 | 锁移动 | 锁动作 | 备注 |
+|---|---|---|---|
+| `root` | ✅（移速 0） | ❌ | 定身只是动不了，刀照挥。锁动作会让「被定住又打不了」变得不可玩 |
+| `slow` | 移速 ×0.6 | ❌ | |
+| `paralyze` | ✅ | ✅ | 硬控，2.4s |
+| `sleep` | ✅ | ✅ | 硬控，3.5s，**挨打必须立刻醒** |
+
+硬直（HURT）三原则：
+1. 只有真的吃到伤害才进硬直；霸体 / 无敌帧不进。
+2. 硬直后 0.35 秒免疫窗口内只吃击退不吃硬直，否则三个敌人能轮流把玩家锁死。
+3. 硬直时长按击退强度给，0.08~0.26 秒，不要超过 0.3 秒。
+
+## 当前状态
+
+可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
+打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
+305 个测试（GdUnit4，44 个 suite）全绿，架构检查通过。
+其中 4 个是场景端到端（真跑 main.tscn），10 个是领域端到端。
+
+待接入：真实关卡美术与视差背景、音效、联机同步、天赋 UI。
