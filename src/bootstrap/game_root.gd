@@ -61,6 +61,8 @@ var _numbers: DamageNumberPool = null
 var _arena: ArenaBuilder = null
 var _camera: CameraRig = null
 var _projectiles: ProjectileLayer = null
+var _hud_presenter: HudPresenter = null
+var _hud: HudView = null
 var _actor_scene: PackedScene = null
 var _manifest: Dictionary = {}
 var _melee_overrides: Dictionary = {}
@@ -82,6 +84,7 @@ func _ready() -> void:
 	_collect_slots()
 	_spawn_actors()
 	_tuner.apply_saved_overrides()
+	_build_hud()
 
 func _build_services() -> void:
 	_app = CompositionRoot.create(DATA_ROOT, RNG_SEED)
@@ -105,6 +108,14 @@ func _build_arena() -> void:
 	_arena = ArenaBuilder.new(self)
 	_arena.build()
 	_camera = _arena.camera()
+
+## 战斗 HUD。presenter 认识领域对象，view 只认 HudModel。
+## 必须在 _spawn_actors() 之后建，因为要拿到玩家 id。
+func _build_hud() -> void:
+	_hud_presenter = HudPresenter.new(_bus, _player_id)
+	_hud = HudView.new()
+	_hud.name = "Hud"
+	add_child(_hud)
 
 ## 弹体表现层。领域层的弹体列表是唯一真相，这里只做投影。
 func _build_projectiles() -> void:
@@ -320,6 +331,10 @@ func _sync_views() -> void:
 			view.sync_from_runtime()
 	if _projectiles != null:
 		_projectiles.sync(_session.projectiles())
+	if _hud_presenter != null:
+		_hud_presenter.sync(_session, GameConstants.TICK_DELTA)
+		if _hud != null:
+			_hud.render(_hud_presenter.model, _player_id)
 
 ## 宽相只做提示：真正的伤害仍由 BattleSession 的窄相结算，这里绝不改血量。
 func _on_broadphase_candidate(_attacker_id: int, _target_id: int) -> void:
@@ -398,6 +413,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		print("[debug] 碰撞形状显示: %s" % str(tree.debug_collisions_hint))
 
 func _exit_tree() -> void:
+	if _hud_presenter != null:
+		_hud_presenter.unbind()
+		_hud_presenter = null
 	# 组合根被释放时一定解开时间冻结，否则编辑器/下一局会一直停住。
 	if Engine.time_scale <= 0.0:
 		Engine.time_scale = 1.0

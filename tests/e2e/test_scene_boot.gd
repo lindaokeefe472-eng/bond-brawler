@@ -188,3 +188,28 @@ func _melee_override(scene: Node, character_id: String) -> Dictionary:
 		return {}
 	var entry: Variant = (characters as Dictionary).get(character_id, {})
 	return entry if entry is Dictionary else {}
+
+## HUD 必须反映真实状态：快照里要有玩家和敌人，血条比例要跟着掉血走。
+func test_hud_reflects_player_and_enemies() -> void:
+	var runner := _boot()
+	await runner.simulate_frames(SPAWN_FRAMES)
+	var scene: Node = runner.scene()
+	var presenter: HudPresenter = scene.get("_hud_presenter")
+	assert_object(presenter).is_not_null()
+	var pid: int = int(scene.get("_player_id"))
+	assert_int(presenter.model.entries().size()).override_failure_message(
+			"HUD 至少要有玩家 + 敌人两个条目").is_greater_equal(2)
+	var before: float = _hud_hp_ratio(presenter, pid)
+	assert_float(before).is_greater(0.0)
+	var runtime: ActorRuntime = scene.get("_session").get_actor(pid)
+	runtime.stats.take_raw_damage(50.0)
+	await runner.simulate_frames(5)
+	var after: float = _hud_hp_ratio(presenter, pid)
+	assert_float(after).override_failure_message("掉血了但 HUD 血条没动").is_less(before)
+
+func _hud_hp_ratio(presenter: HudPresenter, actor_id: int) -> float:
+	for raw: Variant in presenter.model.entries():
+		var entry: Dictionary = raw
+		if int(entry.get("id", 0)) == actor_id:
+			return float(entry.get("hp_ratio", 0.0))
+	return -1.0

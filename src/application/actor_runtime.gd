@@ -347,6 +347,21 @@ func melee_config() -> Dictionary:
 		"hit_kind": HIT_KIND_LIGHT,
 	}
 
+## HUD 用：能量上限。
+func energy_max() -> float:
+	return _energy_max
+
+## HUD 用：每个槽位的冷却剩余比例（0 = 就绪，1 = 刚放完）。
+func skill_cooldown_ratios() -> Array[float]:
+	var out: Array[float] = []
+	for slot: int in range(SKILL_SLOT_COUNT):
+		var inst: SkillInstance = caster.instance(slot)
+		if inst == null or inst.def == null or inst.def.cooldown <= 0.0:
+			out.append(0.0)
+			continue
+		out.append(clampf(inst.cooldown_left / inst.def.cooldown, 0.0, 1.0))
+	return out
+
 ## 调试用：就地改普攻参数。判定盒和窄相都读同一份 melee_config()，
 ## 所以改完两边一起变 —— 微调时「看到的」就是「打得到的」。
 func set_melee_param(key: StringName, value: float) -> void:
