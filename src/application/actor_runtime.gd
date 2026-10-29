@@ -342,9 +342,17 @@ func melee_config() -> Dictionary:
         # 判定盒用的几何：与窄相同源，保证「看到的就是打得到的」。
         "lane_tolerance": maxf(float(_melee.get("lane_tolerance", GameConstants.MELEE_LANE_TOLERANCE)), 0.0),
         "hit_height": maxf(float(_melee.get("hit_height", GameConstants.MELEE_HIT_HEIGHT)), 0.1),
+        "margin": maxf(float(_melee.get("margin", GameConstants.HITBOX_MARGIN)), 0.0),
         "damage_type": StringName(str(_melee.get("damage_type", "neutral"))),
         "hit_kind": HIT_KIND_LIGHT,
     }
+
+## 调试用：就地改普攻参数。判定盒和窄相都读同一份 melee_config()，
+## 所以改完两边一起变 —— 微调时「看到的」就是「打得到的」。
+func set_melee_param(key: StringName, value: float) -> void:
+    if key == &"":
+        return
+    _melee[String(key)] = value
 
 # ------------------------------------------------------------------ 快照
 func snapshot() -> Dictionary:

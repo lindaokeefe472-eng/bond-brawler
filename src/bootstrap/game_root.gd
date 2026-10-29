@@ -51,6 +51,7 @@ var _skills: SkillRepository = null
 var _type_chart: CombatTypeChart = null
 var _session: BattleSession = null
 var _input: InputAdapter = null
+var _tuner: HitboxTuner = null
 var _feedback: FeedbackDirector = null
 var _numbers: DamageNumberPool = null
 var _arena: ArenaBuilder = null
@@ -69,7 +70,9 @@ func _ready() -> void:
 	_build_feedback()
 	_bind_events()
 	_load_assets()
+	_build_tuner()
 	_spawn_actors()
+	_tuner.apply_saved_overrides()
 
 func _build_services() -> void:
 	_app = CompositionRoot.create(DATA_ROOT, RNG_SEED)
@@ -82,6 +85,12 @@ func _build_services() -> void:
 	_melee_config = _app.melee_config
 	_session = _app.session
 	_input = InputAdapter.new()
+
+## 判定盒微调器（F4）。只在 bootstrap 里 new 具体实现。
+func _build_tuner() -> void:
+	_tuner = HitboxTuner.new()
+	_tuner.name = "HitboxTuner"
+	add_child(_tuner)
 
 func _build_arena() -> void:
 	_arena = ArenaBuilder.new(self)
@@ -178,11 +187,16 @@ func _create_view(actor_id: int, character_id: String) -> ActorView:
 	view.broadphase_sink = _on_broadphase_candidate
 	_views[actor_id] = view
 	_feedback.register_actor_view(actor_id, view)
+	if _tuner != null:
+		_tuner.register(view, character_id)
 	return view
 
 ## 固定步长主循环：累积真实帧时间，按 TICK_DELTA 追赶，最多补 MAX_CATCHUP_TICKS 步。
 func _physics_process(delta: float) -> void:
 	if _session == null:
+		return
+	# 微调时冻结战斗：盒子要在静止画面上量，改完按 F4 继续。
+	if _tuner != null and _tuner.is_tuning():
 		return
 	var max_backlog: float = GameConstants.TICK_DELTA * float(GameConstants.MAX_CATCHUP_TICKS)
 	_accumulator = minf(_accumulator + delta, max_backlog)
@@ -276,6 +290,9 @@ func _shake_for(hit_kind: StringName, is_crit: bool) -> float:
 ## F3 切换碰撞形状调试渲染：判定盒、受击盒、角色胶囊都会画出来。
 ## 用它核对「看到的范围」和「打得到的范围」是否一致。
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if _tuner != null and _tuner.handle_key(event as InputEventKey):
+			return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F3:
 		var tree: SceneTree = get_tree()
 		tree.debug_collisions_hint = not tree.debug_collisions_hint

@@ -62,6 +62,10 @@ var _candidates: Array[int] = []
 ## 判定盒相对角色原点的偏移，由近战参数推导（见 _apply_hitbox_geometry）。
 var _hitbox_center_x: float = 0.0
 var _hitbox_height: float = 0.8
+## 本帧动作状态，refresh_hitbox() 要按它决定盒子该不该显示。
+var _state: int = ActionState.IDLE
+## 微调模式下强制显示判定盒，不用等出手那几帧。
+var _hitbox_preview: bool = false
 
 func _ready() -> void:
     _sprite = get_node_or_null(SPRITE_NODE) as SpriteBillboard
@@ -120,7 +124,7 @@ func _apply_hitbox_geometry() -> void:
     var reach: float = maxf(float(cfg.get("range", GameConstants.MELEE_REACH)), 0.0)
     var lane: float = maxf(float(cfg.get("lane_tolerance", GameConstants.MELEE_LANE_TOLERANCE)), 0.0)
     var height: float = maxf(float(cfg.get("hit_height", GameConstants.MELEE_HIT_HEIGHT)), 0.1)
-    var margin: float = GameConstants.HITBOX_MARGIN
+    var margin: float = maxf(float(cfg.get("margin", GameConstants.HITBOX_MARGIN)), 0.0)
     var body: float = GameConstants.BODY_RADIUS
     var box := BoxShape3D.new()
     # x：从身后 body 到身前 reach；z：纵深 ±lane；y：脚底到命中高度。
@@ -152,6 +156,7 @@ func apply_output(output: Variant) -> void:
     _apply_pose(output.plane_pos, output.height, output.facing, output.state)
 
 func _apply_pose(plane_pos: Vector2, height: float, facing: int, state: int) -> void:
+    _state = state
     position = PlaneMath.to_world(plane_pos, height)
     _facing = 1 if facing >= 0 else -1
     if _sprite != null:
@@ -314,8 +319,9 @@ func _update_hitbox(state: int) -> void:
     if _hitbox == null:
         return
     _hitbox.position = Vector3(_hitbox_center_x * float(_facing), _hitbox_height, 0.0)
-    var active: bool = false
-    if not _is_dead and runtime != null and runtime.action != null:
+    # 微调预览优先：待机状态下也要能看见盒子，否则只能等出手那几帧。
+    var active: bool = _hitbox_preview and not _is_dead
+    if not active and not _is_dead and runtime != null and runtime.action != null:
         var phase: int = runtime.action.attack_phase()
         # 只在判定帧打开。起手帧就打开的话，剑还收着、判定盒已经伸到 1.45 m，
         # 看起来就是「多了一把刀的距离」。后摇同理立刻关掉。
@@ -323,6 +329,17 @@ func _update_hitbox(state: int) -> void:
         # resolve_melee 遇到空候选会退化为全量扫描，所以不会漏伤害。
         active = state == ActionState.ATTACK and phase == ATTACK_PHASE_ACTIVE
     _hitbox.set_active(active)
+
+## 调试用：melee_config 改完之后让盒子按新参数重算一遍。
+## 正常流程只在 bind() 时算一次，因为参数不会变。
+func refresh_hitbox() -> void:
+    _apply_hitbox_geometry()
+    _update_hitbox(_state)
+
+## 调试用：无视攻击相位强制显示判定盒。
+func set_hitbox_preview(on: bool) -> void:
+    _hitbox_preview = on
+    _update_hitbox(_state)
 
 func _on_broadphase_candidate(attacker_id: int, target_id: int) -> void:
     if not _candidates.has(target_id):

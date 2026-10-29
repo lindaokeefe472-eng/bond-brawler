@@ -120,3 +120,36 @@ func test_hitbox_starts_at_the_feet() -> void:
     var bottom: float = hitbox.position.y - box.size.y * 0.5
     assert_float(bottom).override_failure_message(
             "判定盒底面离地 %.2f m，应该贴着脚底" % bottom).is_equal_approx(0.0, 0.02)
+
+## 微调器必须真的改到盒子，而且窄相跟着一起变 —— 否则「看到的」和「打得到的」又分家。
+func test_hitbox_tuner_resizes_the_box() -> void:
+    var runner := _boot()
+    await runner.simulate_frames(SPAWN_FRAMES)
+    var scene: Node = runner.scene()
+    var tuner: HitboxTuner = scene.get_node_or_null("HitboxTuner") as HitboxTuner
+    assert_object(tuner).is_not_null()
+    var views: Dictionary = scene.get("_views")
+    var pid: int = int(scene.get("_player_id"))
+    var view: ActorView = views.get(pid, null) as ActorView
+    assert_object(view).is_not_null()
+
+    var before_width: float = _hitbox_box(view).size.x
+    var before_range: float = float(view.runtime.melee_config()["range"])
+
+    assert_bool(tuner.tune_actor(pid, &"range", 4.0)).override_failure_message(
+            "微调器没有改动 range").is_true()
+
+    var after_range: float = float(view.runtime.melee_config()["range"])
+    var after_box: BoxShape3D = _hitbox_box(view)
+    assert_float(after_range).is_greater(before_range)
+    assert_float(after_box.size.x).override_failure_message(
+            "range 变了但判定盒没跟着变，宽相会和窄相脱节").is_greater(before_width)
+    # 前沿必须始终 = range + margin
+    var hitbox: Area3D = view.get_node_or_null("Hitbox") as Area3D
+    var margin: float = float(view.runtime.melee_config()["margin"])
+    assert_float(hitbox.position.x + after_box.size.x * 0.5).is_equal_approx(after_range + margin, 0.01)
+
+func _hitbox_box(view: ActorView) -> BoxShape3D:
+    var hitbox: Area3D = view.get_node_or_null("Hitbox") as Area3D
+    var shape_node: CollisionShape3D = hitbox.get_node_or_null("CollisionShape3D") as CollisionShape3D
+    return shape_node.shape as BoxShape3D

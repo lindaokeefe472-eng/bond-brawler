@@ -27,6 +27,7 @@ python -I tools/lint_gdscript.py
 # 新增脚本后刷新 class_name 缓存（tools/test.sh 已内置）
 & "D:\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --headless --path . --import
 
+# 判定盒微调：游戏里按 F4（详见下文「判定盒微调」）
 # 跑一段无界面对局，打印血量/位置
 & "D:\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --headless --path . --script res://tools/sim_check.gd
 
@@ -101,11 +102,31 @@ python -I tools/gen_asset_spec.py
    会叠加（0.9 + 0.86 = 1.76），整个盒子浮到头顶，看着完全没对上角色。
    盒子的 y 从脚底起算，margin 只往顶部放，别钻到地板下面。
 
+## 判定盒微调（F4）
+
+游戏里按 **F4** 进入微调：战斗冻结，选中的角色**强制显示**攻击盒（不用等出手）。
+
+| 键 | 作用 |
+|---|---|
+| Tab | 换角色 |
+| ← → | 前伸 `range` ±0.05 |
+| ↑ ↓ | 纵深 `lane_tolerance` ±0.05 |
+| PgUp / PgDn | 高度 `hit_height` ±0.05 |
+| `,` `.` | 余量 `margin` ±0.01 |
+| P | 打印可粘回 `data/` 的 JSON |
+| R | 复位到启动值 |
+| F4 | 退出 |
+
+窄相读的是同一份 `melee_config()`，所以调完「看到的范围」就是「打得到的范围」。
+调完自动写 `user://melee_tuning.json`，下次启动自动套用（headless 不读，避免污染用例）。
+
+**不要在编辑器里拖 CollisionShape3D**：几何每次 `bind()` 都按参数重算，改了也会被覆盖。
+
 ## 当前状态
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-315 个测试（GdUnit4，45 个 suite）全绿，架构检查通过。
+319 个测试（GdUnit4，46 个 suite）全绿，架构检查通过。
 其中 4 个是场景端到端（真跑 main.tscn），10 个是领域端到端。
 
 待接入：真实关卡美术与视差背景、音效、联机同步、天赋 UI。
