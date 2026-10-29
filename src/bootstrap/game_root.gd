@@ -323,6 +323,12 @@ func _build_spec(species: Dictionary, faction: StringName, spawn: Vector2,
 			_melee_default("hit_height", GameConstants.MELEE_HIT_HEIGHT)))
 	melee["margin"] = float(override.get("margin",
 			_melee_default("margin", GameConstants.HITBOX_MARGIN)))
+	# 普攻形态也走数据：attack = "projectile" 的角色（弓手 / 法师）出手时发弹体。
+	if override.has("attack"):
+		melee["attack"] = str(override["attack"])
+	var raw_projectile: Variant = override.get("projectile", {})
+	if raw_projectile is Dictionary:
+		melee["projectile"] = (raw_projectile as Dictionary).duplicate(true)
 	return {
 		"species_id": str(species.get("id", character_id)),
 		"faction": faction,

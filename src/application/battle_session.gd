@@ -250,10 +250,34 @@ func _resolve_hits() -> void:
 		# 边沿：开新一次挥击，清空已命中集合。
 		if actor.consume_attack_activation():
 			actor.begin_attack_swing()
+			# 远程角色在起手那一帧放一发弹体，整段 ACTIVE 不再做扇形判定。
+			if actor.is_ranged_attack():
+				_fire_basic_projectile(actor)
 		# 整个 ACTIVE 窗口每帧都判：盒子亮着的时候就是真能打到的时候。
-		if actor.is_attack_active():
+		if actor.is_attack_active() and not actor.is_ranged_attack():
 			_pipeline.resolve_melee(actor, _actors, actor.melee_config(),
 					_broadphase.get(actor.id, null), actor.attack_hit_ids())
+
+## 普攻弹体：和技能弹体走同一条流水线，命中结算、顿帧、跳字、音效全部复用。
+## 威力仍然按「攻击力 × 倍率」算，和近战普攻同一个口径。
+func _fire_basic_projectile(actor: ActorRuntime) -> void:
+	if actor.stats == null:
+		return
+	var cfg: Dictionary = actor.projectile_config()
+	var origin: Vector2 = actor.plane_pos \
+			+ Vector2(float(actor.facing) * GameConstants.BODY_RADIUS, 0.0)
+	_projectiles.spawn_from_payload(actor.id, actor.faction, {
+		"origin": origin,
+		"facing": actor.facing,
+		"count": 1,
+		"speed": float(cfg.get("speed", 0.0)),
+		"power": actor.stats.value(&"attack") * float(cfg.get("power_ratio", 1.0)),
+		"damage_type": cfg.get("damage_type", &"neutral"),
+		"knockback": float(cfg.get("knockback", 0.0)),
+		"range": float(cfg.get("range", 0.0)),
+		"radius": float(cfg.get("radius", Projectile.DEFAULT_RADIUS)),
+		"piercing": bool(cfg.get("piercing", false)),
+	})
 
 ## 弹体生成：效果器只发事件，落到这里才真的建实体。
 ## 阵营取自施法者，避免技能数据里再抄一份。

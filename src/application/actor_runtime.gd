@@ -371,6 +371,27 @@ func melee_config() -> Dictionary:
 func brain_profile() -> Dictionary:
 	return _brain_profile.duplicate(true)
 
+## 普攻是不是远程。数据里 attack = "projectile" 的角色（弓手 / 法师）走弹体。
+##
+## 为什么必须有这条：这些角色的攻击动作是拉弓/施法，判定却是近战扇形 ——
+## 动作和伤害完全对不上，看起来就是「隔空掉血，没有任何东西飞出去」。
+func is_ranged_attack() -> bool:
+	return StringName(str(_melee.get("attack", "melee"))) == &"projectile"
+
+## 普攻弹体参数。缺字段时退回 GameConstants，保证数据没配也能打出去。
+func projectile_config() -> Dictionary:
+	var raw: Variant = _melee.get("projectile", {})
+	var cfg: Dictionary = raw if raw is Dictionary else {}
+	return {
+		"speed": maxf(float(cfg.get("speed", GameConstants.BASIC_PROJECTILE_SPEED)), 0.0),
+		"range": maxf(float(cfg.get("range", GameConstants.BASIC_PROJECTILE_RANGE)), 0.0),
+		"power_ratio": float(cfg.get("power_ratio", MELEE_POWER_RATIO_DEFAULT)),
+		"knockback": maxf(float(cfg.get("knockback", MELEE_KNOCKBACK_DEFAULT)), 0.0),
+		"damage_type": StringName(str(cfg.get("damage_type", "neutral"))),
+		"radius": maxf(float(cfg.get("radius", Projectile.DEFAULT_RADIUS)), 0.01),
+		"piercing": bool(cfg.get("piercing", false)),
+	}
+
 ## HUD 用：能量上限。
 func energy_max() -> float:
 	return _energy_max

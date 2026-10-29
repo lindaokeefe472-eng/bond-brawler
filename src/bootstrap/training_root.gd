@@ -246,16 +246,18 @@ func training_state() -> Dictionary:
 	var would_hit: bool = false
 	var reach: float = 0.0
 	var lane_tolerance: float = 0.0
+	var ranged: bool = player != null and player.is_ranged_attack()
+	var projectile_range: float = 0.0
 	if player != null:
 		var cfg: Dictionary = player.melee_config()
 		reach = float(cfg.get("range", 0.0))
 		lane_tolerance = float(cfg.get("lane_tolerance", 0.0))
+		if ranged:
+			projectile_range = float(player.projectile_config().get("range", 0.0))
 		if dummy != null:
 			distance = PlaneMath.distance(player.plane_pos, dummy.plane_pos)
 			lane_delta = dummy.plane_pos.y - player.plane_pos.y
-			# 和窄相完全同一个判定函数：面板说「打得到」就一定打得到。
-			would_hit = PlaneMath.in_cone(player.plane_pos, player.facing, dummy.plane_pos,
-					reach, float(cfg.get("half_arc", 0.0)))
+			would_hit = _would_hit(player, dummy, cfg, ranged)
 	return {
 		"player_character": player_character(),
 		"dummy_character": dummy_character(),
@@ -267,11 +269,28 @@ func training_state() -> Dictionary:
 		"lane_delta": lane_delta,
 		"reach": reach,
 		"lane_tolerance": lane_tolerance,
+		"ranged": ranged,
+		"projectile_range": projectile_range,
 		"would_hit": would_hit,
 		"last_hit_distance": _last_hit_distance,
 		"total_damage": _total_damage,
 		"hit_count": _hit_count,
 	}
+
+## 面板上的「判定」必须和真实结算用同一个谓词，否则调试工具本身就在骗人。
+##   近战：PlaneMath.in_cone（和 CombatPipeline.resolve_melee 完全一致）
+##   远程：弹体沿 x 轴直线飞，命中条件是「在正前方、射程内、横向偏移 < 命中半径 + 身位半径」
+func _would_hit(player: ActorRuntime, dummy: ActorRuntime, cfg: Dictionary,
+		ranged: bool) -> bool:
+	if not ranged:
+		return PlaneMath.in_cone(player.plane_pos, player.facing, dummy.plane_pos,
+				float(cfg.get("range", 0.0)), float(cfg.get("half_arc", 0.0)))
+	var pcfg: Dictionary = player.projectile_config()
+	var forward: float = (dummy.plane_pos.x - player.plane_pos.x) * float(player.facing)
+	var lateral: float = absf(dummy.plane_pos.y - player.plane_pos.y)
+	var hit_width: float = float(pcfg.get("radius", Projectile.DEFAULT_RADIUS)) \
+			+ GameConstants.BODY_RADIUS
+	return forward >= 0.0 and forward <= float(pcfg.get("range", 0.0)) and lateral <= hit_width
 
 ## 记录「玩家打中靶子」时的真实距离 —— 这就是核对射程的第一手数据。
 func _on_damage_applied(event: DomainEvent) -> void:

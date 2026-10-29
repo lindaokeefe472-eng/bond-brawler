@@ -148,6 +148,24 @@ func test_dummy_cannot_be_killed_by_a_single_burst() -> void:
 	assert_float(dummy.stats.current_hp).override_failure_message(
 			"靶子没有自动回血，测几轮就没血了").is_equal_approx(dummy.stats.max_hp(), 0.5)
 
+## 数据接线：melee.json 把弓手标成 attack=projectile 之后，运行时必须真的认出来，
+## 训练面板也要改显示弹体射程而不是近战射程。
+func test_ranged_character_is_wired_for_projectiles() -> void:
+	var runner: GdUnitSceneRunner = scene_runner(TRAINING_SCENE)
+	await runner.simulate_frames(BOOT_FRAMES)
+	var scene: Node = runner.scene()
+	assert_bool(scene.call("select_player_character", "archer")).is_true()
+	await runner.simulate_frames(2)
+	var session: BattleSession = scene.get("_session")
+	var player: ActorRuntime = session.get_actor(int(scene.get("_player_id")))
+	assert_object(player).is_not_null()
+	assert_bool(player.is_ranged_attack()).override_failure_message(
+			"弓手没有走远程分支，data/melee.json 的 attack=projectile 没接上").is_true()
+	var state: Dictionary = scene.call("training_state")
+	assert_bool(bool(state["ranged"])).is_true()
+	assert_float(float(state["projectile_range"])).override_failure_message(
+			"弹体射程没传上来").is_greater(2.0)
+
 func _expected_reach(scene: Node, character_id: String) -> float:
 	var manifest: Dictionary = scene.get("_manifest")
 	var characters: Variant = manifest.get("characters", {})

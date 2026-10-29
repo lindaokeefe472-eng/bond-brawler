@@ -93,6 +93,10 @@ python -I tools/gen_asset_spec.py
    这 6 个文件被整段丢掉 —— 表现是「牧师和骷髅弓手攻击时站着不动、枪兵走路滑行、
    法师死亡弹成受击帧」。现在后缀表统一转小写再做别名，`test_sprite_manifest.gd`
    盯着「每个角色都必须有 idle/walk/attack1/hurt/death」。
+16. **归一化按包围盒高度会把长武器角色压小**：lancer 的包围盒 38 px 里有 14 px 是竖直
+   举着的长枪，躯干只有 24 px，按包围盒算出来身高 1.14 m，比别人矮一大截（画面上就是
+   「骑兵没长开」）。`normalize_sprites.py` 现在只在「躯干 < 包围盒 80%」时才改用躯干高度，
+   普通角色口径完全不变 —— 实测只影响 lancer 和 armored_skeleton 两个。
 
 ## 控制效果语义（踩过坑，别再改回去）
 
@@ -160,6 +164,22 @@ python -I tools/gen_asset_spec.py
 
 **不要在编辑器里拖 CollisionShape3D**：几何每次 `bind()` 都按参数重算，改了也会被覆盖。
 
+## 普攻形态（近战 / 远程）
+
+`data/melee.json` 里 `attack = "projectile"` 的角色，普攻不做扇形判定，而是在 ACTIVE
+首帧发一发弹体 —— 弓手、骷髅弓手、法师、牧师。参数看 `projectile` 段
+（speed 米/秒、range 米、radius 命中半径）。
+
+- 唯一判断口是 `ActorRuntime.is_ranged_attack()`；`BattleSession._resolve_hits` 据此二选一，
+  近战那条路完全不受影响（`test_ranged_basic_attack.gd` 两边都盯着）。
+- 弹体和技能弹体走同一条流水线，所以命中结算、顿帧、跳字、音效全都自动复用。
+- 训练场面板对这类角色显示的是**弹体射程**，判定谓词也换成
+  「正前方 + 射程内 + 横向偏移 < 命中半径 + 身位半径」。
+- 弹体表现层还是白色方块占位（`ProjectileLayer`），换正式特效时只改 `_make_mesh`。
+
+**`data/` 不随仓库分发**，新克隆的仓库里所有角色都会退回近战 —— 这是预期行为，
+远程配置在本地 `data/melee.json`（`test_melee_data.gd` 校验字段）。
+
 ## 训练场（`scenes/training.tscn`）
 
 标题界面按 **T** 进入，也可以直接跑这个场景。一个可换角色的玩家 + 一个站桩靶子。
@@ -191,7 +211,7 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-408 个测试（GdUnit4，63 个 suite）全绿，架构检查通过。
+420 个测试（GdUnit4，65 个 suite）全绿，架构检查通过。
 刷怪表和 AI 性格来自 data/stages.json（StageRepository），缺数据时退回内置兜底表。
 训练场是独立场景（TrainingRoot 继承 GameRoot，只重写刷怪），用来量命中范围与伤害。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。

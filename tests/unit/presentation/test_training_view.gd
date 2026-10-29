@@ -50,3 +50,12 @@ func test_hit_stats_are_rounded_for_display() -> void:
 	assert_str(text).contains("1.98 m")
 	assert_str(text).contains("129")
 	assert_str(text).contains("5 次")
+
+## 远程角色量的是弹体射程，不能把近战那一行（纵深容差）照抄过去。
+func test_ranged_characters_show_projectile_range() -> void:
+	var text: String = TrainingView.format_state(_state({
+		"ranged": true,
+		"projectile_range": 9.0,
+	}))
+	assert_str(text).contains("9.00 m（弹体）")
+	assert_bool(text.contains("纵深容差")).is_false()

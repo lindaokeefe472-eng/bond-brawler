@@ -40,6 +40,11 @@ const SKILL_INSTANT_REACH_CAP: float = 2.6
 const MELEE_RANGE_REFERENCE: float = 2.4
 const MELEE_RANGE_SCALE: float = MELEE_REACH / MELEE_RANGE_REFERENCE
 
+## 远程角色（弓手 / 法师）普攻弹体的兜底参数。
+## 数据里 attack = "projectile" 的角色走这条路，具体数值在 data/melee.json 覆盖。
+const BASIC_PROJECTILE_SPEED: float = 14.0
+const BASIC_PROJECTILE_RANGE: float = 9.0
+
 # ---------------------------------------------------------------- 时间
 ## 固定逻辑步长：领域层所有 tick 都以它为单位推进，保证可重放。
 const TICK_RATE: int = 60

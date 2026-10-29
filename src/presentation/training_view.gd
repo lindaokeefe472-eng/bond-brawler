@@ -55,12 +55,20 @@ static func format_state(state: Dictionary) -> String:
 	var verdict: String = "打得到" if bool(state.get("would_hit", false)) else "打不到"
 	var distance_text: String = "—" if distance < 0.0 else "%.2f m" % distance
 	var last_hit_text: String = "—" if last_hit < 0.0 else "%.2f m" % last_hit
+	# 远程角色量的是弹体射程，纵深容差不参与判定，别把近战那一行照抄过去。
+	var reach_line: String
+	if bool(state.get("ranged", false)):
+		reach_line = "普攻射程 %.2f m（弹体）    当前纵深差 %.2f m" % [
+			float(state.get("projectile_range", 0.0)), lane_delta]
+	else:
+		reach_line = "普攻射程 %.2f m    纵深容差 %.2f m    当前纵深差 %.2f m" % [
+			reach, lane_tolerance, lane_delta]
 	return "\n".join(PackedStringArray([
 		"训练场",
 		"角色  %s  (%d/%d)      Q 上一个    E 下一个" % [player_name, player_index, player_count],
 		"站桩  %s  (%d/%d)      Z 上一个    C 下一个" % [dummy_name, dummy_index, dummy_count],
 		"距离 %s    判定：%s      [ ] 调远近    ; ' 调纵深" % [distance_text, verdict],
-		"普攻射程 %.2f m    纵深容差 %.2f m    当前纵深差 %.2f m" % [reach, lane_tolerance, lane_delta],
+		reach_line,
 		"上次命中 %s    累计伤害 %d    命中 %d 次" % [last_hit_text, roundi(total), hits],
 		"G 站桩归位    H 清空统计    Esc 暂停    F3 碰撞形状    F4 判定盒",
 	]))
