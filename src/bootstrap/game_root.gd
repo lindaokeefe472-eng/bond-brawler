@@ -60,6 +60,7 @@ var _feedback: FeedbackDirector = null
 var _numbers: DamageNumberPool = null
 var _arena: ArenaBuilder = null
 var _camera: CameraRig = null
+var _projectiles: ProjectileLayer = null
 var _actor_scene: PackedScene = null
 var _manifest: Dictionary = {}
 var _melee_overrides: Dictionary = {}
@@ -73,6 +74,7 @@ var _broadphase_hits: int = 0
 func _ready() -> void:
 	_build_services()
 	_build_arena()
+	_build_projectiles()
 	_build_feedback()
 	_bind_events()
 	_load_assets()
@@ -103,6 +105,12 @@ func _build_arena() -> void:
 	_arena = ArenaBuilder.new(self)
 	_arena.build()
 	_camera = _arena.camera()
+
+## 弹体表现层。领域层的弹体列表是唯一真相，这里只做投影。
+func _build_projectiles() -> void:
+	_projectiles = ProjectileLayer.new()
+	_projectiles.name = "Projectiles"
+	add_child(_projectiles)
 
 func _build_feedback() -> void:
 	var number_root := Node3D.new()
@@ -310,6 +318,8 @@ func _sync_views() -> void:
 		var view: ActorView = _views[key]
 		if view != null and is_instance_valid(view):
 			view.sync_from_runtime()
+	if _projectiles != null:
+		_projectiles.sync(_session.projectiles())
 
 ## 宽相只做提示：真正的伤害仍由 BattleSession 的窄相结算，这里绝不改血量。
 func _on_broadphase_candidate(_attacker_id: int, _target_id: int) -> void:

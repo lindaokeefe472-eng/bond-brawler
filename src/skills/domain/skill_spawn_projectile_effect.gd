@@ -11,6 +11,10 @@ var damage_type: StringName = &"neutral"
 var piercing: bool = false
 var lifetime: float = 0.0
 var interval: float = 0.0
+## 射程：lifetime 缺省时按 range / speed 推存活时间。
+var reach: float = 0.0
+## 命中半径；0 表示交给 Projectile 的默认值。
+var radius: float = 0.0
 
 func _init(p_count: int = 1,
 		p_speed: float = 0.0,
@@ -19,7 +23,9 @@ func _init(p_count: int = 1,
 		p_damage_type: StringName = &"neutral",
 		p_piercing: bool = false,
 		p_lifetime: float = 0.0,
-		p_interval: float = 0.0) -> void:
+		p_interval: float = 0.0,
+		p_reach: float = 0.0,
+		p_radius: float = 0.0) -> void:
 	count = maxi(1, p_count)
 	speed = p_speed
 	spread = p_spread
@@ -28,6 +34,8 @@ func _init(p_count: int = 1,
 	piercing = p_piercing
 	lifetime = p_lifetime
 	interval = p_interval
+	reach = p_reach
+	radius = p_radius
 
 func apply(ctx: SkillEffectContext) -> void:
 	if ctx == null:
@@ -44,4 +52,6 @@ func apply(ctx: SkillEffectContext) -> void:
 		"piercing": piercing,
 		"lifetime": lifetime,
 		"interval": interval,
+		"range": reach,
+		"radius": radius,
 	})

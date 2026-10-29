@@ -166,7 +166,9 @@ static func _projectile(skill_def: SkillDef, extra: Dictionary, count: int) -> S
 		skill_def.type,
 		bool(extra.get("piercing", false)),
 		float(extra.get("duration", skill_def.duration)),
-		float(extra.get("volley_interval", 0.0)))
+		float(extra.get("volley_interval", 0.0)),
+		skill_def.range,
+		float(extra.get("radius", 0.0)))
 
 ## 增益模板的数值来自数据里的各类 *_mult；self_multiplier 表示施法者自损，
 ## 单独成一发 buff，方便下游按 stat 区分。

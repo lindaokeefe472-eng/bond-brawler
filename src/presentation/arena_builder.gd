@@ -5,8 +5,8 @@
 class_name ArenaBuilder
 extends RefCounted
 
-const ARENA_WIDTH: float = 36.0
-const ARENA_HALF_WIDTH: float = ARENA_WIDTH * 0.5
+const ARENA_HALF_WIDTH: float = GameConstants.ARENA_HALF_WIDTH
+const ARENA_WIDTH: float = ARENA_HALF_WIDTH * 2.0
 const WALL_HEIGHT: float = 6.0
 const WALL_THICKNESS: float = 1.0
 const GROUND_THICKNESS: float = 1.0

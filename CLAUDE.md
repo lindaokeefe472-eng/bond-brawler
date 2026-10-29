@@ -79,7 +79,10 @@ python -I tools/gen_asset_spec.py
 12. **`@tool` 的边界**：编辑器里非 `@tool` 脚本的属性**不可写**（`Invalid assignment`），
    方法也调不了（`placeholder instance`）。所以 `_ready()` 里对 `HitboxAdapter` 的
    `candidate_sink` 赋值必须 `if not Engine.is_editor_hint()` 挡掉。
-13. **`Sprite3D.flip_h` 只翻 UV，不翻四边形**：`offset` 是四边形的平移，翻转时不会跟着镜像。
+13. **事件发出来没人接 = 静默空转**：`combat_pipeline` 对 projectile / volley 模板跳过直接伤害，
+   指望「弹体命中时再结算」，但当时全项目没有任何地方生成弹体 —— 28 个技能放出去
+   既没伤害也没画面。凡是「发事件、等别人处理」的地方，都要有一条契约测试盯着。
+14. **`Sprite3D.flip_h` 只翻 UV，不翻四边形**：`offset` 是四边形的平移，翻转时不会跟着镜像。
    所以 `SpriteBillboard` 必须按朝向把 `offset.x` 取反，否则一转身角色就滑到锚点另一侧
    （实测 knight 差 0.85 m）。`test_sprite_billboard.gd::test_offset_mirrors_with_facing` 守着。
 
@@ -144,7 +147,7 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-320 个测试（GdUnit4，46 个 suite）全绿，架构检查通过。
+340 个测试（GdUnit4，50 个 suite）全绿，架构检查通过。
 其中 4 个是场景端到端（真跑 main.tscn），10 个是领域端到端。
 
 待接入：真实关卡美术与视差背景、音效、联机同步、天赋 UI。

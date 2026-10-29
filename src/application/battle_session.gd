@@ -24,6 +24,7 @@ var _bus: DomainEventBus = null
 var _rng: IRng = null
 var _calculator: CombatDamageCalculator = null
 var _pipeline: CombatPipeline = null
+var _projectiles: ProjectileSystem = null
 ## 本帧由宽相（Area3D）给出的候选：{attacker_id: Array[int]}。空字典 = 不做过滤。
 var _broadphase: Dictionary = {}
 var _waves: StageWaveSpawner = null
@@ -55,6 +56,10 @@ func _init(services: Dictionary = {}) -> void:
 		# 组合根没提供结算器时，用空克制表兜底：伤害公式仍可用，只是没有属性倍率。
 		_calculator = CombatDamageCalculator.new(chart, _rng)
 	_pipeline = CombatPipeline.new(_bus, _rng)
+	# 弹体走独立流水线；管线只负责把「生成」这个事件转过来。
+	_projectiles = ProjectileSystem.new()
+	_projectiles.bounds_x = GameConstants.ARENA_HALF_WIDTH
+	_pipeline.projectile_sink = _on_projectile_spawned
 
 # ------------------------------------------------------------------ 角色管理
 ## 从 spec 建一个 ActorRuntime。spec 字段：
@@ -144,6 +149,10 @@ func tick(dt: float, inputs: Dictionary = {}, broadphase: Dictionary = {}) -> vo
 
 	# 5. 命中结算：普攻与技能都在这里转成真实伤害
 	_resolve_hits()
+
+	# 5.5 弹体：齐射排期 -> 移动 -> 命中 -> 回收。
+	# 放在技能激活之后，保证「这一帧刚放出去的弹体」不会立刻结算到目标身上。
+	_projectiles.tick(step, _actors, _apply_projectile_hit)
 
 	# 6. 状态结算：推进异常状态时长并发过期事件
 	for actor_id: int in ids:
@@ -241,6 +250,24 @@ func _resolve_hits() -> void:
 		if actor.consume_attack_activation():
 			_pipeline.resolve_melee(actor, _actors, actor.melee_config(),
 					_broadphase.get(actor.id, null))
+
+## 弹体生成：效果器只发事件，落到这里才真的建实体。
+## 阵营取自施法者，避免技能数据里再抄一份。
+func _on_projectile_spawned(payload: Dictionary) -> void:
+	var owner_id: int = int(payload.get("owner_id", 0))
+	var owner: ActorRuntime = _actors.get(owner_id, null)
+	if owner == null or not owner.is_alive():
+		return
+	_projectiles.spawn_from_payload(owner_id, owner.faction, payload)
+
+## 弹体命中：转给战斗管线结算，和技能/普攻同一条链。
+func _apply_projectile_hit(projectile: Projectile, target: Variant) -> Variant:
+	var caster: ActorRuntime = _actors.get(projectile.owner_id, null)
+	return _pipeline.resolve_projectile_hit(projectile, caster, target as ActorRuntime)
+
+## 场上的弹体（表现层只读，用来同步视图）。
+func projectiles() -> Array[Projectile]:
+	return _projectiles.items()
 
 # ------------------------------------------------------------------ 波次
 func _tick_waves(dt: float) -> void:

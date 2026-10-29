@@ -39,7 +39,9 @@ static func create(p_owner_id: int, p_faction: StringName, origin: Vector2, faci
 	out.faction = p_faction
 	out.plane_pos = origin
 	var speed: float = maxf(float(config.get("speed", 0.0)), 0.0)
-	out.velocity = Vector2(float(1 if facing >= 0 else -1) * speed, 0.0)
+	# angle 是齐射用的散布角（弧度），绕朝向偏转，不改朝向本身。
+	var angle: float = float(config.get("angle", 0.0))
+	out.velocity = Vector2(float(1 if facing >= 0 else -1), 0.0).rotated(angle) * speed
 	out.power = float(config.get("power", 0.0))
 	out.damage_type = StringName(str(config.get("damage_type", "neutral")))
 	out.knockback = maxf(float(config.get("knockback", 0.0)), 0.0)

@@ -14,6 +14,8 @@ const LANE_MAX: float = 2.6
 const LANE_ALIGN_TOLERANCE: float = 0.85
 ## 角色身位半径（米），用于软碰撞与推挤。
 const BODY_RADIUS: float = 0.42
+## 场地半宽（米）。墙的内表面就在这里，弹体出界即回收。
+const ARENA_HALF_WIDTH: float = 18.0
 ## 地面高度。
 const GROUND_Y: float = 0.0
 ## 每个 sprite 帧对应的世界高度（米），100px 图集 -> 1.8m 身高。

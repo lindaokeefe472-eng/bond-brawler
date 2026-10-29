@@ -25,6 +25,9 @@ const PROJECTILE_TEMPLATES: Array[StringName] = [
 
 var _bus: DomainEventBus = null
 var _rng: IRng = null
+## 弹体生成端口：func(payload: Dictionary)。由 BattleSession 接到 ProjectileSystem。
+## 用 Callable 而不是直接持有系统，效果器和管线都不需要知道弹体怎么存。
+var projectile_sink: Callable = Callable()
 
 func _init(bus: DomainEventBus = null, rng: IRng = null) -> void:
 	_bus = bus
@@ -183,6 +186,11 @@ func _route_effect_event(event: DomainEvent, actors: Dictionary, caster: ActorRu
 		SkillEffect.EVT_BUFF_APPLIED:
 			_apply_buff(payload, actors)
 			_emit(event)
+		SkillEffect.EVT_PROJECTILE_SPAWNED:
+			# 这里是「静默空转」的老地方：事件发出来了，但没人接，技能就白放。
+			if projectile_sink.is_valid():
+				projectile_sink.call(payload)
+			_emit(event)
 		SkillEffect.EVT_KNOCKBACK:
 			# 之前这个事件没有任何订阅者，SkillKnockbackEffect 等于空转：
 			# 带击退的技能（area_burst / dash_attack）打上去只掉血、不位移。
@@ -196,6 +204,26 @@ func _route_effect_event(event: DomainEvent, actors: Dictionary, caster: ActorRu
 			_emit(event)
 		_:
 			_emit(event)
+
+## 弹体命中：和技能/普攻共用同一条结算链，所以属性克制、格挡、顿帧、
+## 震屏、飘字全都自动生效，不需要在弹体里复制一份。
+func resolve_projectile_hit(projectile: Projectile, caster: ActorRuntime,
+		target: ActorRuntime) -> CombatDamageResult:
+	if projectile == null or target == null or not target.is_alive():
+		return null
+	var req := CombatDamageRequest.new()
+	req.attacker_id = projectile.owner_id
+	req.target_id = target.id
+	req.power = projectile.power
+	req.damage_type = projectile.damage_type
+	req.hit_kind = HIT_KIND_SKILL
+	req.knockback = projectile.knockback
+	req.can_crit = true
+	req.is_aerial = caster != null and caster.height > 0.0
+	req.knockback_direction = target.plane_pos - projectile.plane_pos
+	var result: CombatDamageResult = target.take_hit(req)
+	_apply_knockback(target, result)
+	return result
 
 func _build_request(payload: Dictionary, caster: ActorRuntime,
 		target: ActorRuntime) -> CombatDamageRequest:
