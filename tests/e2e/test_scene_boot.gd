@@ -13,8 +13,23 @@ const MAIN_SCENE := "res://scenes/main.tscn"
 const SPAWN_FRAMES: int = 40
 const COMBAT_FRAMES: int = 360
 
+## 起一局并直接进入 PLAYING —— 绝大多数用例关心的是战斗本身，不是标题界面。
 func _boot() -> GdUnitSceneRunner:
+	var runner: GdUnitSceneRunner = _boot_raw()
+	var scene: Node = runner.scene()
+	var flow: SceneFlow = scene.get("_flow")
+	if flow != null:
+		flow.start()
+	return runner
+
+## 停在标题界面，给流程用例用。
+func _boot_raw() -> GdUnitSceneRunner:
 	return scene_runner(MAIN_SCENE)
+
+## 暂停会冻结整棵树；用例中途失败也必须解开，否则后面的用例全废。
+func after_test() -> void:
+	if get_tree() != null:
+		get_tree().paused = false
 
 func test_scene_boots_and_spawns_all_actors() -> void:
 	var runner := _boot()
@@ -213,3 +228,39 @@ func _hud_hp_ratio(presenter: HudPresenter, actor_id: int) -> float:
 		if int(entry.get("id", 0)) == actor_id:
 			return float(entry.get("hp_ratio", 0.0))
 	return -1.0
+
+## 流程：标题 -> 开局 -> 暂停 -> 继续 -> 死亡 -> 结算。
+## 关键不变量：暂停期间领域时钟必须停住，否则「暂停」只是画面停住、后台照打。
+func test_scene_flow_pause_freezes_domain_clock() -> void:
+	var runner: GdUnitSceneRunner = _boot_raw()
+	await runner.simulate_frames(SPAWN_FRAMES)
+	var scene: Node = runner.scene()
+	var flow: SceneFlow = scene.get("_flow")
+	assert_object(flow).is_not_null()
+	assert_int(flow.state()).override_failure_message("应该从标题开始").is_equal(SceneFlow.State.TITLE)
+
+	var session: BattleSession = scene.get("_session")
+	var t0: float = session.time()
+	await runner.simulate_frames(10)
+	assert_float(session.time()).override_failure_message(
+			"标题界面不该推进战斗").is_equal_approx(t0, 0.0001)
+
+	assert_bool(flow.start()).is_true()
+	await runner.simulate_frames(10)
+	var t1: float = session.time()
+	assert_float(t1).override_failure_message("开局后时钟要走").is_greater(t0)
+
+	assert_bool(flow.pause()).is_true()
+	get_tree().paused = true
+	await runner.simulate_frames(10)
+	assert_float(session.time()).override_failure_message(
+			"暂停期间领域时钟不能推进").is_equal_approx(t1, 0.0001)
+
+	assert_bool(flow.resume()).is_true()
+	get_tree().paused = false
+	await runner.simulate_frames(10)
+	assert_float(session.time()).is_greater(t1)
+
+	assert_bool(flow.finish(false)).is_true()
+	assert_int(flow.state()).is_equal(SceneFlow.State.RESULT)
+	assert_bool(flow.is_playing()).is_false()

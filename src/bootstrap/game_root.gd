@@ -44,6 +44,8 @@ const GUARD_FLASH_COLOR: Color = Color(0.6, 0.8, 1.0, 1.0)
 const CRIT_FLASH_COLOR: Color = Color(1.0, 0.85, 0.3, 1.0)
 const LETHAL_FLASH_COLOR: Color = Color(0.9, 0.2, 0.2, 1.0)
 const SHAKE_DURATION: float = 0.32
+## 玩家死亡到结算的缓冲（秒），留给死亡动画。
+const RESULT_DELAY_SECONDS: float = 1.0
 const SCREEN_FLASH_SECONDS: float = 0.18
 
 var _app: CompositionRoot = null
@@ -63,6 +65,11 @@ var _camera: CameraRig = null
 var _projectiles: ProjectileLayer = null
 var _hud_presenter: HudPresenter = null
 var _hud: HudView = null
+var _flow: SceneFlow = null
+var _flow_view: FlowView = null
+var _settings: SettingsModel = null
+## 玩家死亡到弹出结算之间的缓冲，留给死亡动画。
+var _result_delay: float = -1.0
 var _actor_scene: PackedScene = null
 var _manifest: Dictionary = {}
 var _melee_overrides: Dictionary = {}
@@ -85,6 +92,7 @@ func _ready() -> void:
 	_spawn_actors()
 	_tuner.apply_saved_overrides()
 	_build_hud()
+	_build_flow()
 
 func _build_services() -> void:
 	_app = CompositionRoot.create(DATA_ROOT, RNG_SEED)
@@ -108,6 +116,47 @@ func _build_arena() -> void:
 	_arena = ArenaBuilder.new(self)
 	_arena.build()
 	_camera = _arena.camera()
+
+## 流程覆盖层：标题 -> 游戏 -> 暂停 -> 结算。
+func _build_flow() -> void:
+	_flow = SceneFlow.new()
+	_flow_view = FlowView.new()
+	_flow_view.name = "Flow"
+	add_child(_flow_view)
+	_flow_view.on_start = _on_flow_start
+	_flow_view.on_toggle_pause = _on_flow_toggle_pause
+	_flow_view.on_restart = _on_flow_restart
+	_settings = SettingsModel.new()
+	_flow_view.bind_settings(_settings)
+	_flow_view.bind(_flow)
+	_sync_hud_visibility()
+
+func _on_flow_start() -> void:
+	if _flow != null and _flow.start():
+		_flow_view.render(_flow)
+		_sync_hud_visibility()
+
+## 标题界面不该露出血条 —— 那时候战斗还没开始，显示的是初始值。
+func _sync_hud_visibility() -> void:
+	if _hud != null and _flow != null:
+		_hud.visible = _flow.state() != SceneFlow.State.TITLE
+
+## 暂停靠 get_tree().paused：GameRoot 是 PAUSABLE，暂停后 _physics_process 不再跑，
+## 领域时钟自然停住；FlowView 是 ALWAYS，所以还能接 Esc。
+func _on_flow_toggle_pause() -> void:
+	if _flow == null:
+		return
+	if _flow.is_playing():
+		if _flow.pause():
+			get_tree().paused = true
+	elif _flow.is_paused():
+		if _flow.resume():
+			get_tree().paused = false
+	_flow_view.render(_flow)
+
+func _on_flow_restart() -> void:
+	get_tree().paused = false
+	get_tree().reload_current_scene()
 
 ## 战斗 HUD。presenter 认识领域对象，view 只认 HudModel。
 ## 必须在 _spawn_actors() 之后建，因为要拿到玩家 id。
@@ -306,6 +355,9 @@ func _physics_process(delta: float) -> void:
 	# 微调时冻结战斗：盒子要在静止画面上量，改完按 F4 继续。
 	if _tuner != null and _tuner.is_tuning():
 		return
+	# 标题/暂停/结算都不推进战斗。
+	if _flow != null and not _flow.is_playing():
+		return
 	var max_backlog: float = GameConstants.TICK_DELTA * float(GameConstants.MAX_CATCHUP_TICKS)
 	_accumulator = minf(_accumulator + delta, max_backlog)
 	var steps: int = 0
@@ -323,6 +375,14 @@ func _physics_process(delta: float) -> void:
 				broadphase[key] = view.consume_candidates()
 		_session.tick(GameConstants.TICK_DELTA, inputs, broadphase)
 		_sync_views()
+
+	if _result_delay > 0.0:
+		_result_delay -= delta
+		if _result_delay <= 0.0:
+			_result_delay = -1.0
+			if _flow != null and _flow.finish(false):
+				_flow_view.render(_flow)
+				_sync_hud_visibility()
 
 func _sync_views() -> void:
 	for key: Variant in _views.keys():
@@ -379,7 +439,10 @@ func _on_actor_dodged(event: DomainEvent) -> void:
 	_feedback.hit_flash(target_id, GUARD_FLASH_COLOR)
 	_feedback.play_sfx(&"dodge", Vector2.ZERO)
 
-func _on_actor_died(_event: DomainEvent) -> void:
+func _on_actor_died(event: DomainEvent) -> void:
+	if event != null and int(event.payload.get("actor_id", 0)) == _player_id:
+		# 先让死亡动画播完再弹结算。
+		_result_delay = RESULT_DELAY_SECONDS
 	if _feedback == null:
 		return
 	_feedback.camera_shake(GameConstants.SHAKE_HEAVY, SHAKE_DURATION)
