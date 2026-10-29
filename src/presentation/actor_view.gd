@@ -3,6 +3,7 @@
 ## 为什么只读 ActorRuntime 的公开字段：领域层每帧已经把权威结果写回
 ## plane_pos / height / facing / action.current_state()，视图再推一遍不会产生第二份真相，
 ## 也不会反过来修改血量或命中结果。
+@tool
 class_name ActorView
 extends CharacterBody3D
 
@@ -48,7 +49,14 @@ var _sprite: SpriteBillboard = null
 var _hitbox: HitboxAdapter = null
 var _hurtbox: HurtboxAdapter = null
 var _manifest: Dictionary = {}
-var _character_id: String = ""
+## 编辑器里显示哪个角色。运行时由 bind() 覆盖，这里只是让 main.tscn 打开时能看见人。
+@export var character_id: String = "knight":
+    set(value):
+        character_id = value
+        _sprite_dir = "res://assets/sprites/characters/%s" % value
+        if Engine.is_editor_hint():
+            _build_editor_preview()
+
 var _sprite_dir: String = ""
 var _facing: int = 1
 var _last_anim: StringName = &""
@@ -71,15 +79,18 @@ func _ready() -> void:
     _sprite = get_node_or_null(SPRITE_NODE) as SpriteBillboard
     _hitbox = get_node_or_null(HITBOX_NODE) as HitboxAdapter
     _hurtbox = get_node_or_null(HURTBOX_NODE) as HurtboxAdapter
-    if _hitbox != null:
+    # 编辑器里非 @tool 脚本的属性不可写，赋值会报 Invalid assignment。
+    if _hitbox != null and not Engine.is_editor_hint():
         _hitbox.candidate_sink = _on_broadphase_candidate
+    if Engine.is_editor_hint():
+        _build_editor_preview()
 
 ## 绑定领域运行时与外观资源。manifest 是整份素材清单，character_id 是角色 slug。
-func bind(p_runtime: ActorRuntime, character_id: String, manifest: Dictionary) -> void:
+func bind(p_runtime: ActorRuntime, p_character_id: String, manifest: Dictionary) -> void:
     runtime = p_runtime
     actor_id = runtime.id if runtime != null else 0
-    _character_id = character_id
-    _sprite_dir = "res://assets/sprites/characters/%s" % character_id
+    character_id = p_character_id
+    _sprite_dir = "res://assets/sprites/characters/%s" % p_character_id
     _manifest = manifest
     if _sprite != null:
         var characters: Variant = manifest.get("characters", {})
@@ -117,14 +128,20 @@ func bind(p_runtime: ActorRuntime, character_id: String, manifest: Dictionary) -
 func _apply_hitbox_geometry() -> void:
     if _hitbox == null or runtime == null:
         return
+    var cfg: Dictionary = runtime.melee_config()
+    _set_hitbox_geometry(
+            maxf(float(cfg.get("range", GameConstants.MELEE_REACH)), 0.0),
+            maxf(float(cfg.get("lane_tolerance", GameConstants.MELEE_LANE_TOLERANCE)), 0.0),
+            maxf(float(cfg.get("hit_height", GameConstants.MELEE_HIT_HEIGHT)), 0.1),
+            maxf(float(cfg.get("margin", GameConstants.HITBOX_MARGIN)), 0.0))
+
+## 按四个参数摆盒子。运行时用 melee_config()，编辑器预览用 GameConstants 默认值。
+func _set_hitbox_geometry(reach: float, lane: float, height: float, margin: float) -> void:
+    if _hitbox == null:
+        return
     var shape_node: CollisionShape3D = _hitbox.get_node_or_null(HITBOX_SHAPE_NODE) as CollisionShape3D
     if shape_node == null:
         return
-    var cfg: Dictionary = runtime.melee_config()
-    var reach: float = maxf(float(cfg.get("range", GameConstants.MELEE_REACH)), 0.0)
-    var lane: float = maxf(float(cfg.get("lane_tolerance", GameConstants.MELEE_LANE_TOLERANCE)), 0.0)
-    var height: float = maxf(float(cfg.get("hit_height", GameConstants.MELEE_HIT_HEIGHT)), 0.1)
-    var margin: float = maxf(float(cfg.get("margin", GameConstants.HITBOX_MARGIN)), 0.0)
     var body: float = GameConstants.BODY_RADIUS
     var box := BoxShape3D.new()
     # x：从身后 body 到身前 reach；z：纵深 ±lane；y：脚底到命中高度。
@@ -192,6 +209,8 @@ func is_dead() -> bool:
     return _is_dead
 
 func _process(delta: float) -> void:
+    if Engine.is_editor_hint():
+        return
     if _sprite != null:
         _sprite.tick(delta)
     _update_flash(delta)
@@ -299,7 +318,7 @@ func _character_manifest() -> Dictionary:
     var raw_characters: Variant = _manifest.get("characters", {})
     if not (raw_characters is Dictionary):
         return {}
-    var raw_character: Variant = (raw_characters as Dictionary).get(_character_id, {})
+    var raw_character: Variant = (raw_characters as Dictionary).get(character_id, {})
     return raw_character if raw_character is Dictionary else {}
 
 ## 素材包里没有的动作走最近似动画，保证任何角色都不会因为缺一张图集而僵住。
@@ -329,6 +348,38 @@ func _update_hitbox(state: int) -> void:
         # resolve_melee 遇到空候选会退化为全量扫描，所以不会漏伤害。
         active = state == ActionState.ATTACK and phase == ATTACK_PHASE_ACTIVE
     _hitbox.set_active(active)
+
+## 编辑器预览：把 idle 贴图和默认判定盒摆出来。
+##
+## 没有它，main.tscn 在编辑器里就是一片空白 —— 角色全是运行时 _ready() 里建的，
+## 编辑器不执行 _ready()，所以你打开项目只能看到一个孤零零的 Main。
+## 这里只在编辑器里跑，运行时的真相仍然是 bind() + melee_config()。
+func _build_editor_preview() -> void:
+    if not is_inside_tree():
+        return
+    _sprite_dir = "res://assets/sprites/characters/%s" % character_id
+    var manifest_path: String = "res://assets/sprites/characters/manifest.json"
+    if not FileAccess.file_exists(manifest_path):
+        return
+    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(manifest_path))
+    if not (raw is Dictionary):
+        return
+    var characters: Variant = (raw as Dictionary).get("characters", {})
+    if not (characters is Dictionary):
+        return
+    var entry: Variant = (characters as Dictionary).get(character_id, {})
+    if not (entry is Dictionary):
+        return
+    var char_entry: Dictionary = entry
+    if _sprite != null:
+        _sprite.apply_metrics(float(char_entry.get("pixel_size", 0.0)))
+        var anims: Variant = char_entry.get("animations", {})
+        if anims is Dictionary and (anims as Dictionary).has("idle"):
+            _sprite.play_manifest(&"idle", (anims as Dictionary)["idle"], _sprite_dir)
+    _set_hitbox_geometry(GameConstants.MELEE_REACH, GameConstants.MELEE_LANE_TOLERANCE,
+            GameConstants.MELEE_HIT_HEIGHT, GameConstants.HITBOX_MARGIN)
+    if _hitbox != null:
+        _hitbox.position = Vector3(_hitbox_center_x, _hitbox_height, 0.0)
 
 ## 调试用：melee_config 改完之后让盒子按新参数重算一遍。
 ## 正常流程只在 bind() 时算一次，因为参数不会变。

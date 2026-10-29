@@ -1,6 +1,28 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://src/bootstrap/game_root.gd" id="1_game_root"]
+[ext_resource type="PackedScene" path="res://scenes/actors/actor_view.tscn" id="2_actor"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_game_root")
+
+; 编辑器里能看见的角色槽位。运行时 GameRoot 直接复用它们（_take_slot），
+; 不会重复实例化；多出来的角色（波次）才现场 new。
+; 场地和相机仍然是运行时建的 —— 那是 ArenaBuilder 的活。
+[node name="ActorSlots" type="Node3D" parent="."]
+
+[node name="Player" parent="ActorSlots" instance=ExtResource("2_actor")]
+position = Vector3(-5, 0, 0)
+character_id = "knight"
+
+[node name="EnemyA" parent="ActorSlots" instance=ExtResource("2_actor")]
+position = Vector3(4, 0, -1.2)
+character_id = "orc"
+
+[node name="EnemyB" parent="ActorSlots" instance=ExtResource("2_actor")]
+position = Vector3(6.5, 0, 1)
+character_id = "skeleton"
+
+[node name="EnemyC" parent="ActorSlots" instance=ExtResource("2_actor")]
+position = Vector3(9, 0, -0.4)
+character_id = "armored_orc"

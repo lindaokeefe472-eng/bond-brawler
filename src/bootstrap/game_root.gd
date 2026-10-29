@@ -7,6 +7,8 @@ class_name GameRoot
 extends Node3D
 
 const ACTOR_SCENE_PATH: String = "res://scenes/actors/actor_view.tscn"
+## main.tscn 里预置的角色槽位。有就复用，没有就现场实例化。
+const ACTOR_SLOTS_NODE: String = "ActorSlots"
 const MANIFEST_PATH: String = "res://assets/sprites/characters/manifest.json"
 const DATA_ROOT: String = "res://data"
 const TYPE_CHART_FILE: String = "type_chart.json"
@@ -60,6 +62,7 @@ var _actor_scene: PackedScene = null
 var _manifest: Dictionary = {}
 var _melee_config: Dictionary = {}
 var _views: Dictionary = {}
+var _slots: Array[ActorView] = []
 var _player_id: int = 0
 var _accumulator: float = 0.0
 var _broadphase_hits: int = 0
@@ -71,6 +74,7 @@ func _ready() -> void:
 	_bind_events()
 	_load_assets()
 	_build_tuner()
+	_collect_slots()
 	_spawn_actors()
 	_tuner.apply_saved_overrides()
 
@@ -173,16 +177,39 @@ func _skill_entries(species: Dictionary) -> Array:
 			break
 	return entries
 
+## 收集编辑器里摆好的角色槽位，这样 main.tscn 打开时左上角能看到人和碰撞盒。
+func _collect_slots() -> void:
+	_slots.clear()
+	var slots_root: Node = get_node_or_null(ACTOR_SLOTS_NODE)
+	if slots_root == null:
+		return
+	for child: Node in slots_root.get_children():
+		var slot: ActorView = child as ActorView
+		if slot != null:
+			_slots.append(slot)
+
+## 取一个还没绑定的槽位。槽位不够时返回 null，由调用方现场实例化。
+func _take_slot() -> ActorView:
+	while not _slots.is_empty():
+		var slot: ActorView = _slots.pop_front()
+		if slot != null and is_instance_valid(slot):
+			return slot
+	return null
+
 func _create_view(actor_id: int, character_id: String) -> ActorView:
 	var runtime: ActorRuntime = _session.get_actor(actor_id)
-	if runtime == null or _actor_scene == null:
+	if runtime == null:
 		return null
-	var view := _actor_scene.instantiate() as ActorView
+	var view: ActorView = _take_slot()
 	if view == null:
-		push_warning("GameRoot: %s 根节点不是 ActorView" % ACTOR_SCENE_PATH)
-		return null
+		if _actor_scene == null:
+			return null
+		view = _actor_scene.instantiate() as ActorView
+		if view == null:
+			push_warning("GameRoot: %s 根节点不是 ActorView" % ACTOR_SCENE_PATH)
+			return null
+		add_child(view)
 	view.name = "Actor_%d" % actor_id
-	add_child(view)
 	view.bind(runtime, character_id, _manifest)
 	view.broadphase_sink = _on_broadphase_candidate
 	_views[actor_id] = view

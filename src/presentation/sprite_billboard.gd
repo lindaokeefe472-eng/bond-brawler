@@ -2,6 +2,8 @@
 ##
 ## 为什么不用 AnimationPlayer：帧数与循环标记都来自 manifest，
 ## 用 hframes + frame 直接推进既没有额外资源依赖，也能在无场景树的单测里验证循环语义。
+## 编辑器里也要能被 ActorView 的预览调用，所以是 @tool。
+@tool
 class_name SpriteBillboard
 extends Sprite3D
 

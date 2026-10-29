@@ -71,7 +71,14 @@ python -I tools/gen_asset_spec.py
 10. **贴图锚点不是包围盒中心**：角色几乎都单手持械，刀剑会把包围盒中心拽到武器上
    （knight 偏 0.43 m、skeleton 0.39 m）。`normalize_sprites.py` 取「列高 ≥ 最高列一半」
    的列的中点当水平锚点。锚点偏了，判定盒看起来就往角色正前方错开半个身位。
-11. **`Sprite3D.flip_h` 只翻 UV，不翻四边形**：`offset` 是四边形的平移，翻转时不会跟着镜像。
+11. **打开项目左上角只有 Main**：场地和相机是运行时建的，但四个角色槽位
+   （`main.tscn` 的 `ActorSlots`）是**预置**在场景里的，`GameRoot` 用 `_take_slot()`
+   复用它们。`ActorView` / `SpriteBillboard` 是 `@tool`，编辑器里自己加载 idle 贴图，
+   否则打开项目就是一片空白。加角色时两边都要动：`main.tscn` 加槽位 + `ENEMY_CHARACTERS`。
+12. **`@tool` 的边界**：编辑器里非 `@tool` 脚本的属性**不可写**（`Invalid assignment`），
+   方法也调不了（`placeholder instance`）。所以 `_ready()` 里对 `HitboxAdapter` 的
+   `candidate_sink` 赋值必须 `if not Engine.is_editor_hint()` 挡掉。
+13. **`Sprite3D.flip_h` 只翻 UV，不翻四边形**：`offset` 是四边形的平移，翻转时不会跟着镜像。
    所以 `SpriteBillboard` 必须按朝向把 `offset.x` 取反，否则一转身角色就滑到锚点另一侧
    （实测 knight 差 0.85 m）。`test_sprite_billboard.gd::test_offset_mirrors_with_facing` 守着。
 
