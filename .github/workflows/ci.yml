@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.1"
+
+jobs:
+  check:
+    name: 测试与约束检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # 直接下载官方发布包，不用第三方 action —— 版本固定，出问题也好排查。
+      - name: 安装 Godot ${{ env.GODOT_VERSION }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL -o /tmp/godot.zip "$url"
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          install -m 0755 "/tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      # 这两项不依赖引擎，先跑：失败得最快，日志也最干净。
+      - name: 静态检查
+        run: |
+          python3 -I tools/lint_gdscript.py
+          python3 -I tools/check_architecture.py
+
+      # .godot/ 不入库，必须先 import 生成 class_name 缓存，否则测试会报
+      # "Identifier XXX not declared"（CLAUDE.md 踩坑第 9 条）。
+      - name: 导入资源
+        run: godot --headless --path . --import
+
+      - name: GdUnit4 全量测试
+        run: GODOT="$(command -v godot)" bash tools/test.sh
+
+      # 公开仓库不含 data/ 与 assets/sprites/，相关用例会整组 skip。
+      # 这里把跳过数打出来，避免「全绿」被误读成「全覆盖」。
+      - name: 汇总
+        if: always()
+        run: |
+          echo "跳过用例数（缺 data/ 与 assets/sprites/）："
+          grep -rhoE "[0-9]+ skipped" reports/*/results.xml 2>/dev/null || echo "0"
