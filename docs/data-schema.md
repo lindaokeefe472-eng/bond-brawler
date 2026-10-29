@@ -71,6 +71,32 @@
 
 种族 id → 移动型。
 
+## melee.json（可选）
+
+普攻判定参数，**逐角色**。这是唯一需要手改的数值表，改完重跑游戏即可，
+不用重新导入素材，也不用动代码。
+
+```json
+{
+  "defaults": { "lane_tolerance": 0.85, "hit_height": 1.6, "margin": 0.06 },
+  "characters": {
+    "knight": { "reach": 2.04, "windup": 0.25, "active": 0.167 }
+  }
+}
+```
+
+| 字段 | 含义 | 缺省来源 |
+|---|---|---|
+| `reach` | 判定盒前沿（米），从身后 `BODY_RADIUS` 处往前伸这么远 | manifest 的 `melee_reach`（图集里武器挥得最远的那一帧） |
+| `windup` | 起手到判定帧的秒数 | manifest 的 `melee_windup` |
+| `active` | 判定帧持续秒数 | manifest 的 `melee_active` |
+| `lane_tolerance` | 纵深容差（±米），盒子 z 方向的一半 | `defaults` → `GameConstants` |
+| `hit_height` | 判定高度（米），盒子从脚底起算 | `defaults` → `GameConstants` |
+| `margin` | 只覆盖浮点误差的余量，别当手感余量用 | `defaults` → `GameConstants` |
+
+优先级：`melee.json` → manifest（图集算出来的）→ `GameConstants`。
+游戏里按 **F4** 可以实时调前四个，按 **P** 打印的 JSON 直接粘进 `characters` 段。
+
 ## 单位与陷阱
 
 - 时间一律秒，不是帧。

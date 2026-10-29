@@ -13,6 +13,8 @@ const MANIFEST_PATH: String = "res://assets/sprites/characters/manifest.json"
 const DATA_ROOT: String = "res://data"
 const TYPE_CHART_FILE: String = "type_chart.json"
 const ACTIONS_FILE: String = "actions.json"
+## 普攻判定的手改表。缺这个文件时全部退回图集算出来的值。
+const MELEE_FILE: String = "melee.json"
 const RNG_SEED: int = 20261028
 
 const PLAYER_CHARACTER: String = "knight"
@@ -60,6 +62,7 @@ var _arena: ArenaBuilder = null
 var _camera: CameraRig = null
 var _actor_scene: PackedScene = null
 var _manifest: Dictionary = {}
+var _melee_overrides: Dictionary = {}
 var _melee_config: Dictionary = {}
 var _views: Dictionary = {}
 var _slots: Array[ActorView] = []
@@ -121,6 +124,9 @@ func _load_assets() -> void:
 	_actor_scene = load(ACTOR_SCENE_PATH) as PackedScene
 	if _actor_scene == null:
 		push_warning("GameRoot: 无法加载 %s，角色将不可见" % ACTOR_SCENE_PATH)
+	var raw_melee: Variant = _data.read_json(MELEE_FILE)
+	if raw_melee is Dictionary:
+		_melee_overrides = raw_melee
 	var raw_manifest: Variant = _data.read_json(MANIFEST_PATH)
 	if raw_manifest is Dictionary:
 		_manifest = raw_manifest
@@ -150,10 +156,18 @@ func _build_spec(species: Dictionary, faction: StringName, spawn: Vector2,
 	if not species.is_empty():
 		# 物种表原样作为 stats：CombatActorStats 会优先取 battle_hp 作为 max_hp。
 		stats = species.duplicate(true)
+	var override: Dictionary = _melee_override(character_id)
 	var melee: Dictionary = _melee_config.duplicate(true)
-	var reach: float = _character_melee_reach(character_id)
+	var reach: float = float(override.get("reach", _character_melee_reach(character_id)))
 	if reach > 0.0:
 		melee["range"] = reach
+	# 盒子几何的三个参数也走数据表，缺省才用 GameConstants。
+	melee["lane_tolerance"] = float(override.get("lane_tolerance",
+			_melee_default("lane_tolerance", GameConstants.MELEE_LANE_TOLERANCE)))
+	melee["hit_height"] = float(override.get("hit_height",
+			_melee_default("hit_height", GameConstants.MELEE_HIT_HEIGHT)))
+	melee["margin"] = float(override.get("margin",
+			_melee_default("margin", GameConstants.HITBOX_MARGIN)))
 	return {
 		"species_id": str(species.get("id", character_id)),
 		"faction": faction,
@@ -170,11 +184,14 @@ func _build_spec(species: Dictionary, faction: StringName, spawn: Vector2,
 ## 判定盒就会在武器没伸出来的时候亮着 —— 看起来就是盒子比武器大一圈。
 func _character_attack_profile(character_id: String) -> Dictionary:
 	var entry: Dictionary = _character_entry(character_id)
+	var override: Dictionary = _melee_override(character_id)
 	var profile: Dictionary = {}
-	if entry.has("melee_windup"):
-		profile["attack_windup"] = float(entry["melee_windup"])
-	if entry.has("melee_active"):
-		profile["attack_active"] = float(entry["melee_active"])
+	var windup: float = float(override.get("windup", entry.get("melee_windup", 0.0)))
+	var active: float = float(override.get("active", entry.get("melee_active", 0.0)))
+	if windup > 0.0:
+		profile["attack_windup"] = windup
+	if active > 0.0:
+		profile["attack_active"] = active
 	return profile
 
 ## 每个角色的普攻前伸来自它自己的图集（attack1 挥到最远的那一帧）。
@@ -182,6 +199,21 @@ func _character_attack_profile(character_id: String) -> Dictionary:
 ## 兽人斧子短，判定盒就明显超出去一截。
 func _character_melee_reach(character_id: String) -> float:
 	return maxf(float(_character_entry(character_id).get("melee_reach", 0.0)), 0.0)
+
+## data/melee.json 里这个角色的覆盖项。没有就返回空字典。
+func _melee_override(character_id: String) -> Dictionary:
+	var characters: Variant = _melee_overrides.get("characters", {})
+	if not (characters is Dictionary):
+		return {}
+	var entry: Variant = (characters as Dictionary).get(character_id, {})
+	return entry if entry is Dictionary else {}
+
+## data/melee.json 的 defaults 段。
+func _melee_default(key: String, fallback: float) -> float:
+	var defaults: Variant = _melee_overrides.get("defaults", {})
+	if not (defaults is Dictionary) or not (defaults as Dictionary).has(key):
+		return fallback
+	return float((defaults as Dictionary)[key])
 
 func _character_entry(character_id: String) -> Dictionary:
 	var characters: Variant = _manifest.get("characters", {})

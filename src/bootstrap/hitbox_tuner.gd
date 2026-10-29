@@ -170,13 +170,13 @@ func print_tuning() -> void:
 		if cid.is_empty() or view == null or not is_instance_valid(view) or view.runtime == null:
 			continue
 		data[cid] = _params_of(view)
-	print("[tune] 当前微调：")
-	print(JSON.stringify(data, "  ", false))
+	print("[tune] 粘到 data/melee.json 的 characters 段里：")
+	print(JSON.stringify({"characters": data}, "  ", false))
 
 func _params_of(view: ActorView) -> Dictionary:
 	var cfg: Dictionary = view.runtime.melee_config()
 	return {
-		"range": snappedf(float(cfg.get("range", 0.0)), 0.01),
+		"reach": snappedf(float(cfg.get("range", 0.0)), 0.01),
 		"lane_tolerance": snappedf(float(cfg.get("lane_tolerance", 0.0)), 0.01),
 		"hit_height": snappedf(float(cfg.get("hit_height", 0.0)), 0.01),
 		"margin": snappedf(float(cfg.get("margin", 0.0)), 0.01),

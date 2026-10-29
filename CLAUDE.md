@@ -114,6 +114,8 @@ python -I tools/gen_asset_spec.py
      共用一个 reach 的话，长枪和短斧必然有一个对不上（knight 2.04 / orc 2.14 /
      armored_orc 1.98，差一倍）。
    - `melee_windup` / `melee_active`：武器真正伸出去的那几帧的时间段。
+   - 手改表在 `data/melee.json`（可选），优先级：melee.json → manifest → GameConstants。
+     F4 调完按 P 打印的 JSON 直接粘进 `characters` 段。
      原来所有角色共用 0.17~0.27 s，很多角色那一段还停在「武器收着」的帧上，
      判定盒就会在武器没挥出去的时候亮着 —— 看起来就是盒子比武器大一圈。
 

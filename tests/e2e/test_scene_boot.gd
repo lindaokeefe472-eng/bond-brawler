@@ -169,12 +169,22 @@ func test_melee_reach_comes_from_the_character_art() -> void:
 		if not characters.has(view.character_id):
 			continue
 		var entry: Dictionary = characters[view.character_id]
-		if not entry.has("melee_reach"):
+		# data/melee.json 的手改值优先，没有才用图集算出来的值
+		var override: Dictionary = _melee_override(scene, view.character_id)
+		var expected: float = float(override.get("reach", entry.get("melee_reach", 0.0)))
+		if expected <= 0.0:
 			continue
-		var expected: float = float(entry["melee_reach"])
 		var actual: float = float(view.runtime.melee_config()["range"])
 		assert_float(actual).override_failure_message(
 				"%s 的 reach 没跟着图集走（期望 %.2f，实际 %.2f）" % [view.character_id, expected, actual]
 			).is_equal_approx(expected, 0.01)
 		checked += 1
 	assert_int(checked).is_greater_equal(2)
+
+func _melee_override(scene: Node, character_id: String) -> Dictionary:
+	var overrides: Dictionary = scene.get("_melee_overrides")
+	var characters: Variant = overrides.get("characters", {})
+	if not (characters is Dictionary):
+		return {}
+	var entry: Variant = (characters as Dictionary).get(character_id, {})
+	return entry if entry is Dictionary else {}
