@@ -87,6 +87,12 @@ python -I tools/gen_asset_spec.py
 14. **`Sprite3D.flip_h` 只翻 UV，不翻四边形**：`offset` 是四边形的平移，翻转时不会跟着镜像。
    所以 `SpriteBillboard` 必须按朝向把 `offset.x` 取反，否则一转身角色就滑到锚点另一侧
    （实测 knight 差 0.85 m）。`test_sprite_billboard.gd::test_offset_mirrors_with_facing` 守着。
+15. **素材包的后缀不统一，而且大小写混用**：`Attack`（Priest / Skeleton Archer，没有编号）、
+   `Attack3`（Swordsman，没有前导零）、`DEATH`（Wizard，全大写）、`Walk01`（Lancer /
+   Knight Templar）。`build_asset_manifest.py` 原来只精确匹配 `Attack01/02/03`，
+   这 6 个文件被整段丢掉 —— 表现是「牧师和骷髅弓手攻击时站着不动、枪兵走路滑行、
+   法师死亡弹成受击帧」。现在后缀表统一转小写再做别名，`test_sprite_manifest.gd`
+   盯着「每个角色都必须有 idle/walk/attack1/hurt/death」。
 
 ## 控制效果语义（踩过坑，别再改回去）
 
@@ -185,7 +191,7 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-405 个测试（GdUnit4，62 个 suite）全绿，架构检查通过。
+408 个测试（GdUnit4，63 个 suite）全绿，架构检查通过。
 刷怪表和 AI 性格来自 data/stages.json（StageRepository），缺数据时退回内置兜底表。
 训练场是独立场景（TrainingRoot 继承 GameRoot，只重写刷怪），用来量命中范围与伤害。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。

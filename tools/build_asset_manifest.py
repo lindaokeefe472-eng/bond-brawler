@@ -16,15 +16,30 @@ import sys
 
 FRAME = 100  # 图集单帧边长（像素）
 
+# 后缀（小写） -> 动作名。值为 None 表示「认得，但本项目暂时不用」。
+#
+# 这套素材包的后缀并不统一，而且大小写混用：
+#   Priest / Skeleton Archer 的攻击叫 "Attack"（没有编号）
+#   Swordsman 的第三段叫 "Attack3"（没有前导零）
+#   Wizard 的死亡叫 "DEATH"（全大写）
+#   Knight Templar / Lancer 有两套步态 "Walk01" / "Walk02"
+# 原来只精确匹配 Attack01/02/03 且区分大小写，这 6 个动作被整段丢掉：
+# 表现就是「牧师和骷髅弓手攻击时站着不动、枪兵和圣殿骑士走路时不动、
+# 法师死亡直接弹成受击帧」。
 SUFFIX_MAP = {
-    "Idle": "idle",
-    "Walk": "walk",
-    "Attack01": "attack1",
-    "Attack02": "attack2",
-    "Attack03": "attack3",
-    "Block": "block",
-    "Hurt": "hurt",
-    "Death": "death",
+    "idle": "idle",
+    "walk": "walk",
+    "walk01": "walk",
+    "walk02": None,
+    "attack": "attack1",
+    "attack01": "attack1",
+    "attack02": "attack2",
+    "attack03": "attack3",
+    "attack3": "attack3",
+    "block": "block",
+    "hurt": "hurt",
+    "death": "death",
+    "heal": None,
 }
 
 
@@ -63,7 +78,10 @@ def main():
             if not stem.startswith(prefix):
                 continue
             suffix = stem[len(prefix):]
-            action = SUFFIX_MAP.get(suffix)
+            key = suffix.strip().lower()
+            if key not in SUFFIX_MAP:
+                continue
+            action = SUFFIX_MAP[key]
             if action is None:
                 continue
             src = os.path.join(char_dir, fname)
