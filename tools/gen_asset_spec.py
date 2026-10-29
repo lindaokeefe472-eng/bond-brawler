@@ -42,8 +42,8 @@ assets/sprites/characters/<slug>/<slug>_shadow.png
 
 ## 3. 动画帧表（自动生成）
 
-| 角色 | 帧尺寸 | pixel_size | idle | walk | atk1 | atk2 | atk3 | block | hurt | death |
-|---|---|---|---|---|---|---|---|---|---|---|
+| 角色 | 帧尺寸 | pixel_size | idle | walk | atk1 | atk2 | atk3 | block | hurt | death | 普攻前伸 | 判定窗口 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
 """
 
 
@@ -66,9 +66,13 @@ def main():
             else:
                 cells.append("-")
         idle_fs = a.get("idle", {}).get("frame_size", ["?", "?"])
-        rows.append("| %s `%s` | %sx%s | %.4f | %s |" % (
+        reach = float(e.get("melee_reach", 0.0))
+        windup = float(e.get("melee_windup", 0.0))
+        active = float(e.get("melee_active", 0.0))
+        window = "%.2f~%.2f s" % (windup, windup + active) if active > 0.0 else "-"
+        rows.append("| %s `%s` | %sx%s | %.4f | %s | %.2f m | %s |" % (
             e["display_name"], slug, idle_fs[0], idle_fs[1],
-            float(e.get("pixel_size", 0.0)), " | ".join(cells)))
+            float(e.get("pixel_size", 0.0)), " | ".join(cells), reach, window))
 
     tail = """
 ## 4. 多层视差背景

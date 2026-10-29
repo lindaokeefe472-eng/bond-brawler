@@ -150,6 +150,10 @@ func _build_spec(species: Dictionary, faction: StringName, spawn: Vector2,
 	if not species.is_empty():
 		# 物种表原样作为 stats：CombatActorStats 会优先取 battle_hp 作为 max_hp。
 		stats = species.duplicate(true)
+	var melee: Dictionary = _melee_config.duplicate(true)
+	var reach: float = _character_melee_reach(character_id)
+	if reach > 0.0:
+		melee["range"] = reach
 	return {
 		"species_id": str(species.get("id", character_id)),
 		"faction": faction,
@@ -157,8 +161,34 @@ func _build_spec(species: Dictionary, faction: StringName, spawn: Vector2,
 		"stats": stats,
 		"skills": _skill_entries(species),
 		"brain_profile": brain_profile,
-		"melee": _melee_config.duplicate(true),
+		"melee": melee,
+		"action_profile": _character_attack_profile(character_id),
 	}
+
+## 普攻判定窗口也逐角色：图集里武器真正挥出去的那几帧。
+## 用统一的 0.17~0.27 秒，很多角色那一段还停在「武器收着」的帧上，
+## 判定盒就会在武器没伸出来的时候亮着 —— 看起来就是盒子比武器大一圈。
+func _character_attack_profile(character_id: String) -> Dictionary:
+	var entry: Dictionary = _character_entry(character_id)
+	var profile: Dictionary = {}
+	if entry.has("melee_windup"):
+		profile["attack_windup"] = float(entry["melee_windup"])
+	if entry.has("melee_active"):
+		profile["attack_active"] = float(entry["melee_active"])
+	return profile
+
+## 每个角色的普攻前伸来自它自己的图集（attack1 挥到最远的那一帧）。
+## 共用一个常量的话，长枪和短斧必然有一个对不上：主角剑长显得刚好，
+## 兽人斧子短，判定盒就明显超出去一截。
+func _character_melee_reach(character_id: String) -> float:
+	return maxf(float(_character_entry(character_id).get("melee_reach", 0.0)), 0.0)
+
+func _character_entry(character_id: String) -> Dictionary:
+	var characters: Variant = _manifest.get("characters", {})
+	if not (characters is Dictionary):
+		return {}
+	var entry: Variant = (characters as Dictionary).get(character_id, {})
+	return entry if entry is Dictionary else {}
 
 func _skill_entries(species: Dictionary) -> Array:
 	var entries: Array = []

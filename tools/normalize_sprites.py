@@ -81,6 +81,44 @@ def body_anchor_x(frames):
     return (body[0] + body[-1] + 1) * 0.5
 
 
+def melee_reach(frames, anchor_x, pixel_size):
+    """普攻前伸：attack1 里武器伸得最远的那一帧，相对身体锚点的米数。
+
+    判定盒前沿就用它。各角色武器长短差一倍（orc 2.14 m、armored_orc 1.98 m），
+    共用一个常量必然对不上 —— 剑长的角色盒子偏短，斧子短的角色盒子偏长。
+    """
+    far = 0
+    for frame in frames:
+        box = frame.getbbox()
+        if box is not None:
+            far = max(far, box[2])
+    return round(max(far - anchor_x, 0.0) * pixel_size, 3)
+
+
+SPRITE_FPS = 12.0
+
+
+def melee_window(frames, anchor_x, pixel_size, ratio=0.9):
+    """普攻判定窗口：武器真正挥出去的那几帧，返回 (windup 秒, active 秒)。
+
+    判定盒只在 ACTIVE 段亮，而 ACTIVE 段原来写死 0.17~0.27 秒 —— 各角色动画
+    长度不同，这一段经常落在「武器还收着」的帧上，看起来就是盒子比武器大一圈。
+    这里直接按图集算：前伸 >= 峰值 90% 的帧算判定帧。
+    """
+    extents = []
+    for frame in frames:
+        box = frame.getbbox()
+        extents.append((box[2] - anchor_x) * pixel_size if box is not None else 0.0)
+    peak = max(extents) if extents else 0.0
+    if peak <= 0.0:
+        return 0.0, 0.0
+    active = [i for i, e in enumerate(extents) if e >= peak * ratio]
+    if not active:
+        return 0.0, 0.0
+    first, last = active[0], active[-1]
+    return round(first / SPRITE_FPS, 3), round((last - first + 1) / SPRITE_FPS, 3)
+
+
 def main():
     with io.open(MANIFEST, encoding="utf-8") as f:
         manifest = json.load(f)
@@ -99,6 +137,16 @@ def main():
         anchor_x = body_anchor_x(
             load_frames(os.path.join(char_dir, anims[ref_name]["file"]), anims[ref_name]["frames"]))
         anchor_y = ref[3]                      # 脚底
+        # 必须在裁剪循环之前算 —— 裁剪会把图集覆盖成紧贴内容的版本，
+        # 之后再 load_frames 就按 100px 切不开了。
+        if "attack1" in anims:
+            attack_frames = load_frames(
+                os.path.join(char_dir, anims["attack1"]["file"]), anims["attack1"]["frames"])
+            entry["melee_reach"] = melee_reach(attack_frames, anchor_x, pixel_size)
+            windup, active = melee_window(attack_frames, anchor_x, pixel_size)
+            if windup > 0.0 and active > 0.0:
+                entry["melee_windup"] = windup
+                entry["melee_active"] = active
 
         for name, data in anims.items():
             box = boxes[name]

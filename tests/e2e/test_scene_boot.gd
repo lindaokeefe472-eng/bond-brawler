@@ -153,3 +153,28 @@ func _hitbox_box(view: ActorView) -> BoxShape3D:
     var hitbox: Area3D = view.get_node_or_null("Hitbox") as Area3D
     var shape_node: CollisionShape3D = hitbox.get_node_or_null("CollisionShape3D") as CollisionShape3D
     return shape_node.shape as BoxShape3D
+
+## 回归：所有角色共用一个 reach。主角剑长显得刚好，兽人斧子短，
+## 判定盒就明显超出去一截 —— 每个角色的前伸必须来自它自己的图集。
+func test_melee_reach_comes_from_the_character_art() -> void:
+    var runner := _boot()
+    await runner.simulate_frames(SPAWN_FRAMES)
+    var scene: Node = runner.scene()
+    var manifest: Dictionary = scene.get("_manifest")
+    var views: Dictionary = scene.get("_views")
+    var checked: int = 0
+    for key: Variant in views.keys():
+        var view: ActorView = views[key] as ActorView
+        var characters: Dictionary = manifest["characters"]
+        if not characters.has(view.character_id):
+            continue
+        var entry: Dictionary = characters[view.character_id]
+        if not entry.has("melee_reach"):
+            continue
+        var expected: float = float(entry["melee_reach"])
+        var actual: float = float(view.runtime.melee_config()["range"])
+        assert_float(actual).override_failure_message(
+                "%s 的 reach 没跟着图集走（期望 %.2f，实际 %.2f）" % [view.character_id, expected, actual]
+            ).is_equal_approx(expected, 0.01)
+        checked += 1
+    assert_int(checked).is_greater_equal(2)
