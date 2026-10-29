@@ -46,6 +46,19 @@ func register(view: ActorView, character_id: String) -> void:
 		_ids.sort()
 	_defaults[actor_id] = view.runtime.melee_config()
 
+## 角色被换掉（训练场切角色会重建 ActorRuntime）时清掉登记，
+## 否则 Tab 会转到已经不存在的节点上，微调面板显示的还是旧角色。
+func unregister(actor_id: int) -> void:
+	_views.erase(actor_id)
+	_chars.erase(actor_id)
+	_defaults.erase(actor_id)
+	var index: int = _ids.find(actor_id)
+	if index < 0:
+		return
+	_ids.remove_at(index)
+	_index = clampi(_index, 0, maxi(_ids.size() - 1, 0))
+	_apply_preview()
+
 func is_tuning() -> bool:
 	return _tuning
 

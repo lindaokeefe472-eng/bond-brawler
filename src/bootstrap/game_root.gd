@@ -7,6 +7,9 @@ class_name GameRoot
 extends Node3D
 
 const ACTOR_SCENE_PATH: String = "res://scenes/actors/actor_view.tscn"
+## 主场景与训练场。标题界面按 T 在两者之间切。
+const MAIN_SCENE: String = "res://scenes/main.tscn"
+const TRAINING_SCENE: String = "res://scenes/training.tscn"
 ## main.tscn 里预置的角色槽位。有就复用，没有就现场实例化。
 const ACTOR_SLOTS_NODE: String = "ActorSlots"
 const MANIFEST_PATH: String = "res://assets/sprites/characters/manifest.json"
@@ -147,6 +150,7 @@ func _build_flow() -> void:
 	_flow_view.on_start = _on_flow_start
 	_flow_view.on_toggle_pause = _on_flow_toggle_pause
 	_flow_view.on_restart = _on_flow_restart
+	_flow_view.on_training = _on_flow_training
 	_settings = SettingsModel.new()
 	_flow_view.on_volume_changed = _on_volume_changed
 	_flow_view.bind_settings(_settings)
@@ -212,6 +216,11 @@ func _on_flow_toggle_pause() -> void:
 func _on_flow_restart() -> void:
 	get_tree().paused = false
 	get_tree().reload_current_scene()
+
+## 标题界面按 T 进训练场。切场景前先解开暂停，否则新场景一进来就是冻住的。
+func _on_flow_training() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file(TRAINING_SCENE)
 
 ## 战斗 HUD。presenter 认识领域对象，view 只认 HudModel。
 ## 必须在 _spawn_actors() 之后建，因为要拿到玩家 id。

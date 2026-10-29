@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/bootstrap/training_root.gd" id="1_training_root"]
+[ext_resource type="PackedScene" path="res://scenes/actors/actor_view.tscn" id="2_actor"]
+
+[node name="Training" type="Node3D"]
+script = ExtResource("1_training_root")
+
+; 和 main.tscn 一样预置角色槽位：编辑器里打开就能看见人和判定盒，
+; 运行时 GameRoot._take_slot() 直接复用，切角色时才现场实例化。
+; 场地、相机、面板都是运行时建的（ArenaBuilder / TrainingRoot）。
+[node name="ActorSlots" type="Node3D" parent="."]
+
+[node name="Player" parent="ActorSlots" instance=ExtResource("2_actor")]
+position = Vector3(-2, 0, 0)
+character_id = "knight"
+
+[node name="Dummy" parent="ActorSlots" instance=ExtResource("2_actor")]
+position = Vector3(2, 0, 0)
+character_id = "orc"

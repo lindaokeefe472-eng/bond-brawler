@@ -12,6 +12,10 @@ const DIMMER_COLOR: Color = Color(0.02, 0.02, 0.04, 0.72)
 var on_start: Callable = Callable()
 var on_toggle_pause: Callable = Callable()
 var on_restart: Callable = Callable()
+## 标题界面按 T 进训练场。没接就不显示这条提示。
+var on_training: Callable = Callable()
+## 暂停界面按 T 退出当前模式（训练场回主菜单）。没接就不显示。
+var on_exit: Callable = Callable()
 ## func(channel: StringName, value: float)，由 GameRoot 接到音频总线上。
 var on_volume_changed: Callable = Callable()
 
@@ -49,9 +53,15 @@ func render(flow: SceneFlow) -> void:
 		return
 	match flow.state():
 		SceneFlow.State.TITLE:
-			_show(TITLE_TEXT, "Enter / 空格 开始    L 切换语言")
+			var start_hint: String = "Enter / 空格 开始    L 切换语言"
+			if on_training.is_valid():
+				start_hint += "    T 训练场"
+			_show(TITLE_TEXT, start_hint)
 		SceneFlow.State.PAUSED:
-			_show("暂停", "Esc 继续")
+			var pause_hint: String = "Esc 继续"
+			if on_exit.is_valid():
+				pause_hint += "    T 返回主菜单"
+			_show("暂停", pause_hint)
 		SceneFlow.State.RESULT:
 			_show("胜利" if flow.victory() else "战斗结束", "R 重来")
 		_:
@@ -87,6 +97,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _flow.is_result() and on_restart.is_valid():
 				_consume(viewport)
 				on_restart.call()
+		KEY_T:
+			# 标题界面进训练场；暂停界面从训练场回主菜单。两者共用 T，不会同时成立。
+			if _flow.state() == SceneFlow.State.TITLE and on_training.is_valid():
+				_consume(viewport)
+				on_training.call()
+			elif _flow.state() == SceneFlow.State.PAUSED and on_exit.is_valid():
+				_consume(viewport)
+				on_exit.call()
 		KEY_L:
 			if _flow.state() == SceneFlow.State.TITLE and _settings != null:
 				_settings.cycle_language()

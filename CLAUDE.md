@@ -28,6 +28,8 @@ python -I tools/lint_gdscript.py
 & "D:\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --headless --path . --import
 
 # 判定盒微调：游戏里按 F4（详见下文「判定盒微调」）
+# 训练场：标题界面按 T，或直接跑这个场景
+& "D:\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --path . res://scenes/training.tscn
 # 跑一段无界面对局，打印血量/位置
 & "D:\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --headless --path . --script res://tools/sim_check.gd
 
@@ -152,12 +154,40 @@ python -I tools/gen_asset_spec.py
 
 **不要在编辑器里拖 CollisionShape3D**：几何每次 `bind()` 都按参数重算，改了也会被覆盖。
 
+## 训练场（`scenes/training.tscn`）
+
+标题界面按 **T** 进入，也可以直接跑这个场景。一个可换角色的玩家 + 一个站桩靶子。
+
+| 键 | 作用 |
+|---|---|
+| Q / E | 玩家角色 上一个 / 下一个（素材清单里的 20 个全在） |
+| Z / C | 站桩角色 上一个 / 下一个 |
+| `[` `]` | 站桩沿 x 挪远 / 挪近 0.1 m |
+| `;` `'` | 站桩沿纵深挪 0.1 m |
+| G | 站桩归位 |
+| H | 清空「上次命中 / 累计伤害 / 命中次数」 |
+| Esc | 暂停（暂停界面按 T 回主菜单） |
+
+面板上三行是关键数据：**距离**、**判定**（和窄相同一个 `PlaneMath.in_cone`，
+它说「打得到」就一定打得到）、**上次命中距离**。核对「这个角色到底能打多远」时看后两个。
+
+实现上的三条契约（改之前先读 `training_root.gd` 的类注释）：
+1. 站桩**不传 brain_profile**（`null`），`BattleSession._run_ai` 会整只跳过它 —— 不移动、不还手。
+2. 站桩每帧被 `_pin_dummy()` 钉回指定坐标，击退和推挤都推不走，量出来的距离才稳定。
+3. 靶子 2000 血 + 停手 1.5 秒回满（按**领域时钟** `_session.time()` 计时，
+   不按 `_process` 的 delta —— headless 下 delta 接近 0，按它算会得到不可复现的结果）。
+
+换角色是**重建 ActorRuntime**，不是换贴图：前伸、判定窗口、图集路径都是建号时算进 spec 的。
+重建时必须同时清掉 `_views` / `FeedbackDirector` / `HitboxTuner` 里的旧登记，
+`HitboxTuner.unregister()` 就是干这个的。
+
 ## 当前状态
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-394 个测试（GdUnit4，60 个 suite）全绿，架构检查通过。
+405 个测试（GdUnit4，62 个 suite）全绿，架构检查通过。
 刷怪表和 AI 性格来自 data/stages.json（StageRepository），缺数据时退回内置兜底表。
+训练场是独立场景（TrainingRoot 继承 GameRoot，只重写刷怪），用来量命中范围与伤害。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。
 音效走 IAudio 端口 + AudioDirector，占位音效由 tools/gen_placeholder_sfx.py 合成，映射在 assets/audio/cues.json。
 存档走 ISaveRepository 端口 + SaveStore（原子写 + 版本信封 + 损坏回退），
