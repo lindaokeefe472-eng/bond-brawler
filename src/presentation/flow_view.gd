@@ -71,24 +71,32 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key: InputEventKey = event
 	if not key.pressed or key.echo:
 		return
+	# 先拿到视口再回调：R 会 reload 场景，回调返回时本节点已经不在树上，
+	# 那时 get_viewport() 是 null（Cannot call method on a null value）。
+	var viewport: Viewport = get_viewport()
 	match key.keycode:
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if _flow.state() == SceneFlow.State.TITLE and on_start.is_valid():
+				_consume(viewport)
 				on_start.call()
-				get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
 			if on_toggle_pause.is_valid():
+				_consume(viewport)
 				on_toggle_pause.call()
-				get_viewport().set_input_as_handled()
 		KEY_R:
 			if _flow.is_result() and on_restart.is_valid():
+				_consume(viewport)
 				on_restart.call()
-				get_viewport().set_input_as_handled()
 		KEY_L:
 			if _flow.state() == SceneFlow.State.TITLE and _settings != null:
 				_settings.cycle_language()
 				_refresh_language()
-				get_viewport().set_input_as_handled()
+				_consume(viewport)
+
+## 标记事件已处理。视口可能已经不在了（场景被 reload），所以要判空。
+func _consume(viewport: Viewport) -> void:
+	if viewport != null and is_instance_valid(viewport):
+		viewport.set_input_as_handled()
 
 func _build() -> void:
 	_dimmer = ColorRect.new()

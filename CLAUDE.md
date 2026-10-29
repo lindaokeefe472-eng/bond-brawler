@@ -156,7 +156,7 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-392 个测试（GdUnit4，59 个 suite）全绿，架构检查通过。
+394 个测试（GdUnit4，60 个 suite）全绿，架构检查通过。
 刷怪表和 AI 性格来自 data/stages.json（StageRepository），缺数据时退回内置兜底表。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。
 音效走 IAudio 端口 + AudioDirector，占位音效由 tools/gen_placeholder_sfx.py 合成，映射在 assets/audio/cues.json。
