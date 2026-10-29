@@ -63,6 +63,8 @@ var _is_guarding: bool = false
 var _last_output: LocoActionOutput = null
 var _prev_skill_inputs: Array[bool] = [false, false, false, false]
 var _attack_pending: bool = false
+## 本次挥击已经打到过的目标。判定窗口有十来帧，同一个目标只能吃一次伤害。
+var _attack_hit_ids: Dictionary = {}
 var _skill_pending: Dictionary = {}
 ## 本次施法的定义在起手时记住：ACTIVE 可能短于一帧，事后无法再从 caster 取回。
 var _cast_def: SkillDef = null
@@ -281,11 +283,29 @@ func consume_skill_activation() -> Dictionary:
 	_skill_pending = {}
 	return out
 
-## 取出本帧新进入攻击 ACTIVE 的标记（无则 false）。
+## 取出本帧新进入攻击 ACTIVE 的标记（无则 false）。只用来开新一次挥击。
 func consume_attack_activation() -> bool:
 	var out: bool = _attack_pending
 	_attack_pending = false
 	return out
+
+## 当前是否处在普攻的判定窗口内。
+##
+## 为什么需要它：ACTIVE 段有 0.1~0.17 秒（十来帧），而伤害以前只在「进入 ACTIVE」
+## 那一帧结算一次。目标晚两帧走进判定盒，肉眼看到打中了却一滴血不掉 ——
+## 判定必须整个窗口每帧都在跑，靠 _attack_hit_ids 保证同一目标只吃一次。
+func is_attack_active() -> bool:
+	if action == null or not is_alive():
+		return false
+	return action.current_state() == LocoActionState.ATTACK 			and action.attack_phase() == LocoActionMachine.ATTACK_PHASE_ACTIVE
+
+## 开新一次挥击：清空已命中集合。
+func begin_attack_swing() -> void:
+	_attack_hit_ids.clear()
+
+## 本次挥击已经打到的目标（传给 CombatPipeline 做去重）。
+func attack_hit_ids() -> Dictionary:
+	return _attack_hit_ids
 
 func skills_ready() -> Array[bool]:
 	var out: Array[bool] = []

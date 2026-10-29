@@ -108,7 +108,8 @@ func skill_targets(caster_id: int, origin: Vector2, facing: int, hitbox: Diction
 ##   非空 -> 只结算其中的目标。判定盒由近战参数推导且各方向加了 HITBOX_MARGIN，
 ##   所以它是窄相的严格超集，过滤只会省掉无用的遍历，不会漏掉本该命中的目标。
 func resolve_melee(attacker: ActorRuntime, actors: Dictionary,
-		config: Dictionary, candidate_ids: Variant = null) -> Array[CombatDamageResult]:
+		config: Dictionary, candidate_ids: Variant = null,
+		already_hit: Variant = null) -> Array[CombatDamageResult]:
 	var results: Array[CombatDamageResult] = []
 	if attacker == null or not attacker.is_alive():
 		return results
@@ -132,6 +133,9 @@ func resolve_melee(attacker: ActorRuntime, actors: Dictionary,
 			continue
 		if not PlaneMath.in_cone(attacker.plane_pos, attacker.facing, target.plane_pos, reach, half_arc):
 			continue
+		# 判定窗口每帧都在跑，同一个目标本次挥击只能吃一次伤害。
+		if already_hit is Dictionary and (already_hit as Dictionary).has(target.id):
+			continue
 
 		var req := CombatDamageRequest.new()
 		req.attacker_id = attacker.id
@@ -145,6 +149,8 @@ func resolve_melee(attacker: ActorRuntime, actors: Dictionary,
 		req.knockback_direction = target.plane_pos - attacker.plane_pos
 
 		var result: CombatDamageResult = target.take_hit(req)
+		if already_hit is Dictionary:
+			(already_hit as Dictionary)[target.id] = true
 		results.append(result)
 		_apply_knockback(target, result)
 	return results

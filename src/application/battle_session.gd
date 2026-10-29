@@ -247,9 +247,13 @@ func _resolve_hits() -> void:
 		var activation: Dictionary = actor.consume_skill_activation()
 		if not activation.is_empty():
 			_pipeline.resolve_skill(activation, _actors)
+		# 边沿：开新一次挥击，清空已命中集合。
 		if actor.consume_attack_activation():
+			actor.begin_attack_swing()
+		# 整个 ACTIVE 窗口每帧都判：盒子亮着的时候就是真能打到的时候。
+		if actor.is_attack_active():
 			_pipeline.resolve_melee(actor, _actors, actor.melee_config(),
-					_broadphase.get(actor.id, null))
+					_broadphase.get(actor.id, null), actor.attack_hit_ids())
 
 ## 弹体生成：效果器只发事件，落到这里才真的建实体。
 ## 阵营取自施法者，避免技能数据里再抄一份。
