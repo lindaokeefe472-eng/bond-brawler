@@ -28,6 +28,13 @@ var _index: int = 0
 var _tuning: bool = false
 var _defaults: Dictionary = {}  # actor_id -> melee_config 快照，用于复位
 
+## 屏幕上的数值面板。只打日志的话，Output 面板没开就等于什么都没发生。
+var _hud_layer: CanvasLayer = null
+var _hud: Label = null
+
+func _ready() -> void:
+	_build_hud()
+
 func register(view: ActorView, character_id: String) -> void:
 	if view == null or view.runtime == null:
 		return
@@ -199,6 +206,7 @@ func _cycle(step: int) -> void:
 
 func _report() -> void:
 	var view: ActorView = _views.get(selected_id(), null) as ActorView
+	_refresh_hud(view)
 	if view == null or not is_instance_valid(view) or view.runtime == null:
 		return
 	var cfg: Dictionary = view.runtime.melee_config()
@@ -214,6 +222,57 @@ func _report() -> void:
 		float(cfg.get("range", 0.0)), float(cfg.get("lane_tolerance", 0.0)),
 		float(cfg.get("hit_height", 0.0)), float(cfg.get("margin", 0.0)),
 		size.x, size.y, size.z, float(cfg.get("range", 0.0)) + float(cfg.get("margin", 0.0))])
+
+## 左上角常驻一行提示（仅调试构建），进微调后换成数值面板。
+func _build_hud() -> void:
+	_hud_layer = CanvasLayer.new()
+	_hud_layer.name = "TunerHud"
+	_hud_layer.layer = 100
+	add_child(_hud_layer)
+	_hud = Label.new()
+	_hud.position = Vector2(12.0, 10.0)
+	_hud.add_theme_font_size_override("font_size", 14)
+	_hud.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.92))
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.55)
+	style.set_content_margin_all(8)
+	style.set_corner_radius_all(4)
+	_hud.add_theme_stylebox_override("normal", style)
+	_hud_layer.add_child(_hud)
+	_refresh_hud(null)
+
+func _refresh_hud(view: ActorView) -> void:
+	if _hud == null:
+		return
+	if not _tuning:
+		_hud.text = "F3 碰撞形状    F4 判定盒微调"
+		_hud.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.45))
+		_hud.visible = OS.is_debug_build()
+		return
+	_hud.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
+	_hud.visible = true
+	if view == null or not is_instance_valid(view) or view.runtime == null:
+		_hud.text = "判定盒微调（没有可调角色）"
+		return
+	var cfg: Dictionary = view.runtime.melee_config()
+	var hitbox: Area3D = view.get_node_or_null(ActorView.HITBOX_NODE) as Area3D
+	var shape_node: CollisionShape3D = null
+	if hitbox != null:
+		shape_node = hitbox.get_node_or_null(ActorView.HITBOX_SHAPE_NODE) as CollisionShape3D
+	var size: Vector3 = Vector3.ZERO
+	if shape_node != null and shape_node.shape is BoxShape3D:
+		size = (shape_node.shape as BoxShape3D).size
+	var lines: PackedStringArray = [
+		"判定盒微调    %s (%s)    [Tab 换角色]" % [view.name, str(_chars.get(view.actor_id, "?"))],
+		"前伸 reach   %.2f    ← →" % float(cfg.get("range", 0.0)),
+		"纵深 lane    %.2f    ↑ ↓" % float(cfg.get("lane_tolerance", 0.0)),
+		"高度 height  %.2f    PgUp PgDn" % float(cfg.get("hit_height", 0.0)),
+		"余量 margin  %.2f    , ." % float(cfg.get("margin", 0.0)),
+		"盒子 %.2f × %.2f × %.2f    前沿 %.2f" % [
+			size.x, size.y, size.z, float(cfg.get("range", 0.0)) + float(cfg.get("margin", 0.0))],
+		"P 打印 JSON    R 复位    F4 退出（战斗继续）",
+	]
+	_hud.text = "\n".join(lines)
 
 func _save() -> void:
 	var data: Dictionary = {}
