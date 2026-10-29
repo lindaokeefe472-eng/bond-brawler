@@ -93,7 +93,9 @@ func test_activated_event_carries_hitbox_and_effects() -> void:
 	assert_int(payload.get("actor_id")).is_equal(1)
 	assert_int(payload.get("slot")).is_equal(0)
 	var hitbox: Dictionary = payload.get("hitbox", {})
-	assert_float(float(hitbox.get("reach", 0.0))).is_equal_approx(7.5, 0.0001)
+	# 弹体技能有可见弹道，只做尺度换算，不夹瞬发上限
+	assert_float(float(hitbox.get("reach", 0.0))).is_equal_approx(
+			7.5 * GameConstants.MELEE_RANGE_SCALE, 0.0001)
 	assert_float(float(hitbox.get("half_arc", 0.0))).is_equal_approx(0.5, 0.0001)
 	assert_float(float(hitbox.get("lane_tolerance", 0.0))).is_equal_approx(GameConstants.LANE_ALIGN_TOLERANCE, 0.0001)
 	var effects: Array = payload.get("effects", [])

@@ -136,6 +136,17 @@ static func build(skill_def: SkillDef) -> Array[SkillEffect]:
 
 ## 命中盒参数：reach 取技能射程，半张角取数据里的 cone（弧度），
 ## 纵深容差默认沿用全局对齐容差，光束类按 width 放宽。
+## 数据里的 range 是原游戏尺度；本项目角色统一 1.8 m，必须换算。
+## 和普攻共用 MELEE_RANGE_SCALE，保证「普攻够得到」和「技能够得到」是同一把尺子。
+static func world_reach(skill_def: SkillDef) -> float:
+	if skill_def == null:
+		return 0.0
+	return maxf(skill_def.range * GameConstants.MELEE_RANGE_SCALE, 0.0)
+
+## 瞬发技能（没有弹体）的射程：先换算，再夹到 SKILL_INSTANT_REACH_CAP。
+static func instant_reach(skill_def: SkillDef) -> float:
+	return clampf(world_reach(skill_def), 0.0, GameConstants.SKILL_INSTANT_REACH_CAP)
+
 static func hitbox(skill_def: SkillDef) -> Dictionary:
 	if skill_def == null:
 		return {
@@ -148,8 +159,13 @@ static func hitbox(skill_def: SkillDef) -> Dictionary:
 	var lane_tolerance: float = float(extra.get("lane_tolerance", 0.0))
 	if lane_tolerance <= 0.0:
 		lane_tolerance = maxf(GameConstants.LANE_ALIGN_TOLERANCE, float(extra.get("width", 0.0)) * 0.5)
+	# 弹体技能有可见弹道，射程按世界尺度换算即可；瞬发技能必须夹到玩家看得见的距离。
+	var template: StringName = normalize_template(skill_def.template)
+	var reach: float = world_reach(skill_def)
+	if template != TEMPLATE_PROJECTILE and template != TEMPLATE_VOLLEY:
+		reach = instant_reach(skill_def)
 	return {
-		"reach": maxf(0.0, skill_def.range),
+		"reach": reach,
 		"half_arc": maxf(0.0, half_arc),
 		"lane_tolerance": lane_tolerance,
 	}
@@ -167,7 +183,7 @@ static func _projectile(skill_def: SkillDef, extra: Dictionary, count: int) -> S
 		bool(extra.get("piercing", false)),
 		float(extra.get("duration", skill_def.duration)),
 		float(extra.get("volley_interval", 0.0)),
-		skill_def.range,
+		world_reach(skill_def),
 		float(extra.get("radius", 0.0)))
 
 ## 增益模板的数值来自数据里的各类 *_mult；self_multiplier 表示施法者自损，

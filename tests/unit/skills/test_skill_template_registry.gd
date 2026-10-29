@@ -91,6 +91,24 @@ func test_hitbox_uses_range_cone_and_width() -> void:
 		"cone": 0.4,
 		"width": 2.0,
 	}))
-	assert_float(float(box.get("reach", 0.0))).is_equal_approx(12.0, 0.0001)
+	assert_float(float(box.get("reach", 0.0))).is_equal_approx(
+			SkillTemplateRegistry.instant_reach(_def({"template": "beam", "range": 12.0})), 0.0001)
 	assert_float(float(box.get("half_arc", 0.0))).is_equal_approx(0.4, 0.0001)
 	assert_float(float(box.get("lane_tolerance", 0.0))).is_equal_approx(1.0, 0.0001)
+
+## 原游戏的 range 是它自己的尺度，必须换算到本项目（角色统一 1.8 m）。
+## 回归：以前直接用原始值，一个写着「近战」的技能能隔 4.3 米瞬发打人。
+func test_instant_reach_is_scaled_and_capped() -> void:
+	var def := _def({"id": "beam", "template": "beam", "range": 12.0})
+	assert_float(SkillTemplateRegistry.world_reach(def)).is_equal_approx(
+			12.0 * GameConstants.MELEE_RANGE_SCALE, 0.0001)
+	assert_float(SkillTemplateRegistry.instant_reach(def)).is_equal_approx(
+			GameConstants.SKILL_INSTANT_REACH_CAP, 0.0001)
+
+## 弹体技能有可见弹道，射程只换算不夹取。
+func test_projectile_reach_is_scaled_not_capped() -> void:
+	var def := _def({"id": "orb", "template": "projectile", "range": 20.0})
+	var expected: float = 20.0 * GameConstants.MELEE_RANGE_SCALE
+	assert_float(float(SkillTemplateRegistry.hitbox(def).get("reach", 0.0))).is_equal_approx(expected, 0.0001)
+	assert_float(SkillTemplateRegistry.instant_reach(def)).is_equal_approx(
+			GameConstants.SKILL_INSTANT_REACH_CAP, 0.0001)

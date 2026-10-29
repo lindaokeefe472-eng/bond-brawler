@@ -32,6 +32,11 @@ const MELEE_HIT_HEIGHT: float = 1.6
 const HITBOX_MARGIN: float = 0.06
 ## data/actions.json 的 basic_attack.range 是按原游戏角色体型定的（2.4）。
 ## 本项目角色统一 1.8 m 高，必须按比例换算，否则会出现「隔空打人」。
+## 瞬发技能（没有弹体）的射程上限（米）。
+## 没有可见弹道却打得到六七米外，玩家只会觉得「隔空挨打」。
+## 等光束/冲击波有正式表现之后再放开。
+const SKILL_INSTANT_REACH_CAP: float = 2.6
+
 const MELEE_RANGE_REFERENCE: float = 2.4
 const MELEE_RANGE_SCALE: float = MELEE_REACH / MELEE_RANGE_REFERENCE
 

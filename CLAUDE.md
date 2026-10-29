@@ -116,7 +116,12 @@ python -I tools/gen_asset_spec.py
    判定帧有十来帧，目标晚两帧走进盒子却一滴血不掉，是最难查的一类手感问题。
    同一目标一次挥击只吃一次，靠 `ActorRuntime._attack_hit_ids` 去重
    （`test_melee_window.gd` 盯着）。
-6. **前伸和判定窗口逐角色**，都从图集算进 manifest（`normalize_sprites.py`）：
+6. **技能射程也要换算**。数据里的 `range` 是原游戏尺度，必须乘 `MELEE_RANGE_SCALE`
+   换算到本项目（角色统一 1.8 m）。之前只有普攻换了，技能直接用原始值 ——
+   一个写着「近战」的技能能隔 4.3 米瞬发打人，`hydro` 更能打到 17 米外。
+   瞬发技能（没有弹体）还要夹到 `SKILL_INSTANT_REACH_CAP`：没有可见弹道却打得到
+   六七米外，玩家只会觉得「隔空挨打」。有弹道的弹体技能只换算、不夹取。
+7. **前伸和判定窗口逐角色**，都从图集算进 manifest（`normalize_sprites.py`）：
    - `melee_reach`：attack1 里武器挥得最远的那一帧，相对身体锚点的米数。
      共用一个 reach 的话，长枪和短斧必然有一个对不上（knight 2.04 / orc 2.14 /
      armored_orc 1.98，差一倍）。
@@ -151,7 +156,7 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-390 个测试（GdUnit4，59 个 suite）全绿，架构检查通过。
+392 个测试（GdUnit4，59 个 suite）全绿，架构检查通过。
 刷怪表和 AI 性格来自 data/stages.json（StageRepository），缺数据时退回内置兜底表。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。
 音效走 IAudio 端口 + AudioDirector，占位音效由 tools/gen_placeholder_sfx.py 合成，映射在 assets/audio/cues.json。
