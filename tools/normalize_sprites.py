@@ -49,6 +49,23 @@ def load_frames(path, count):
 
 
 ALPHA_MIN = 8
+## 躯干高度占最高列的比例低于这个值，就认为包围盒被细长武器撑高了。
+BODY_INFLATION_RATIO = 0.8
+
+
+def column_heights(frames):
+    """每一列的最高不透明像素数（跨所有帧取最大值）。"""
+    if not frames:
+        return []
+    width, height = frames[0].width, frames[0].height
+    columns = [0] * width
+    for frame in frames:
+        px = frame.load()
+        for x in range(width):
+            n = sum(1 for y in range(height) if px[x, y][3] > ALPHA_MIN)
+            if n > columns[x]:
+                columns[x] = n
+    return columns
 
 
 def body_anchor_x(frames):
@@ -61,17 +78,11 @@ def body_anchor_x(frames):
     躯干 = 不透明像素高度 >= 最高列一半的那些列。武器列又细又矮，会被这个阈值滤掉；
     披风、头盔羽饰同理。取首尾列的中点，对单侧伸出的武器不敏感。
     """
-    if not frames:
+    columns = column_heights(frames)
+    if not columns:
         return 0.0
-    width, height = frames[0].width, frames[0].height
-    columns = [0] * width
-    for frame in frames:
-        px = frame.load()
-        for x in range(width):
-            n = sum(1 for y in range(height) if px[x, y][3] > ALPHA_MIN)
-            if n > columns[x]:
-                columns[x] = n
-    tallest = max(columns) if columns else 0
+    width = len(columns)
+    tallest = max(columns)
     if tallest <= 0:
         return width * 0.5
     threshold = tallest * 0.5
@@ -79,6 +90,20 @@ def body_anchor_x(frames):
     if not body:
         return width * 0.5
     return (body[0] + body[-1] + 1) * 0.5
+
+
+def body_height(frames):
+    """躯干高度：锚点所在列（左右各一列）里最高的那一列。
+
+    长枪、旗杆这类细长武器会顶到画布顶部，把包围盒撑高；按包围盒归一化，
+    角色就被压小 —— lancer 的包围盒 38 px 里有 14 px 是竖直举着的长枪，
+    躯干只有 24 px，算出来只有 1.14 m 高，比谁都矮一截。
+    """
+    columns = column_heights(frames)
+    if not columns:
+        return 0
+    anchor = int(body_anchor_x(frames))
+    return max(columns[max(0, anchor - 1): min(len(columns), anchor + 2)])
 
 
 def melee_reach(frames, anchor_x, pixel_size):
@@ -132,10 +157,16 @@ def main():
             boxes[name] = union_bbox(frames)
         ref_name = next((n for n in ("idle", "walk") if n in boxes), next(iter(boxes)))
         ref = boxes[ref_name]
+        ref_frames = load_frames(
+            os.path.join(char_dir, anims[ref_name]["file"]), anims[ref_name]["frames"])
+        # 身高默认用包围盒高度（普通角色口径不变）；只有包围盒被细长武器
+        # 或坐骑明显撑高（躯干不到包围盒的 80%）时才改用躯干高度。
         ref_h = max(ref[3] - ref[1], 1)
+        torso_h = body_height(ref_frames)
+        if 0 < torso_h < ref_h * BODY_INFLATION_RATIO:
+            ref_h = torso_h
         pixel_size = TARGET_HEIGHT_M / float(ref_h)
-        anchor_x = body_anchor_x(
-            load_frames(os.path.join(char_dir, anims[ref_name]["file"]), anims[ref_name]["frames"]))
+        anchor_x = body_anchor_x(ref_frames)
         anchor_y = ref[3]                      # 脚底
         # 必须在裁剪循环之前算 —— 裁剪会把图集覆盖成紧贴内容的版本，
         # 之后再 load_frames 就按 100px 切不开了。
