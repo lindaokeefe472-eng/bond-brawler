@@ -18,6 +18,10 @@ var _playing: bool = false
 var _finished: bool = false
 var _elapsed: float = 0.0
 var _facing: int = 1
+## manifest 给的 offset 是「朝右」时的锚点补偿。
+## Sprite3D.flip_h 只翻 UV、不翻四边形，所以朝左时必须把 offset.x 取反，
+## 否则角色会整体滑到锚点另一侧 —— 攻击帧 offset 越大偏得越多（knight attack3 差 1.7 m）。
+var _base_offset: Vector2 = Vector2.ZERO
 ## 每个角色的内容高度不同（16~38 px），所以缩放由 manifest 逐角色给出。
 var _pixel_size: float = 1.0 / GameConstants.PIXELS_PER_METER
 
@@ -82,7 +86,8 @@ func play_manifest(anim_name: StringName, data: Dictionary, sprite_dir: String) 
 	if data.has("offset"):
 		var raw_offset: Variant = data["offset"]
 		if raw_offset is Array and (raw_offset as Array).size() >= 2:
-			offset = Vector2(float(raw_offset[0]), float(raw_offset[1]))
+			_base_offset = Vector2(float(raw_offset[0]), float(raw_offset[1]))
+	_apply_offset()
 	play_atlas(anim_name, atlas, frames, loop)
 
 ## 推进播放。非循环动画停在最后一帧并置 finished，供死亡淡出等逻辑等待。
@@ -108,6 +113,12 @@ func tick(delta: float) -> void:
 func set_facing(direction: int) -> void:
 	_facing = 1 if direction >= 0 else -1
 	flip_h = _facing < 0
+	_apply_offset()
+
+## 把锚点补偿按朝向镜像。flip_h 翻的是 UV，四边形仍停在原地，
+## 所以 x 分量必须跟着朝向取反，锚点才会一直落在节点原点上。
+func _apply_offset() -> void:
+	offset = Vector2(_base_offset.x * float(_facing), _base_offset.y)
 
 func set_loop(loop: bool) -> void:
 	_loop = loop

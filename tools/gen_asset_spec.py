@@ -26,7 +26,7 @@ HEADER = """# 素材规范（ASSET_SPEC）
 | 缩放 | 每个角色一个 `pixel_size` = 1.8 / idle 内容高度，存在 manifest 里 |
 | 纹理过滤 | 最近邻（`project.godot` 已设 `default_texture_filter=0`） |
 | 导入预设 | 关闭 mipmap；`compress/mode=0`（无损）；`filter=false` |
-| 锚点 | 每个动作一个 `offset`（像素，+y 向上），把 idle 的脚底中心钉在节点原点 |
+| 锚点 | 每个动作一个 `offset`（像素，+y 向上），把 idle 的脚底 + 躯干中轴钉在节点原点 |
 | 归一化 | `python tools/normalize_sprites.py`（**只对原始素材跑一次**，幂等） |
 
 ## 2. 命名规范
@@ -92,7 +92,9 @@ def main():
 
 1. 每个动作裁到**自己的**内容包围盒（四边形尽量小）。
 2. 所有动作共用一个 `pixel_size`，由 idle 的内容高度反推（身高恒为 1.8 m）。
-3. 每个动作带自己的 `offset`，把 idle 的脚底中心对齐到节点原点。
+3. 每个动作带自己的 `offset`，把 idle 的脚底与**躯干中轴**对齐到节点原点。
+   中轴取「不透明像素高度 ≥ 最高列一半」的列的中点，不是包围盒中心 ——
+   角色普遍单手持械，刀剑会把包围盒中心拽到武器上（knight 差 0.43 m）。
 
 因此**新增角色后必须重新运行归一化**，否则新角色的比例会和别人对不上。
 

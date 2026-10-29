@@ -48,6 +48,39 @@ def load_frames(path, count):
     return out
 
 
+ALPHA_MIN = 8
+
+
+def body_anchor_x(frames):
+    """水平锚点取「躯干中轴」，不是包围盒中心。
+
+    这套素材的角色几乎都单手持械，刀剑/长枪横向伸出去会把包围盒中心拽到武器上：
+    knight 的 idle 包围盒中心在 12.5 px，躯干实际在 8 px —— 折合 0.43 m。
+    画面上就是「角色整个人偏到判定盒左后方半个身位」，判定盒看起来往右错开半格。
+
+    躯干 = 不透明像素高度 >= 最高列一半的那些列。武器列又细又矮，会被这个阈值滤掉；
+    披风、头盔羽饰同理。取首尾列的中点，对单侧伸出的武器不敏感。
+    """
+    if not frames:
+        return 0.0
+    width, height = frames[0].width, frames[0].height
+    columns = [0] * width
+    for frame in frames:
+        px = frame.load()
+        for x in range(width):
+            n = sum(1 for y in range(height) if px[x, y][3] > ALPHA_MIN)
+            if n > columns[x]:
+                columns[x] = n
+    tallest = max(columns) if columns else 0
+    if tallest <= 0:
+        return width * 0.5
+    threshold = tallest * 0.5
+    body = [x for x in range(width) if columns[x] >= threshold]
+    if not body:
+        return width * 0.5
+    return (body[0] + body[-1] + 1) * 0.5
+
+
 def main():
     with io.open(MANIFEST, encoding="utf-8") as f:
         manifest = json.load(f)
@@ -59,11 +92,13 @@ def main():
         for name, data in anims.items():
             frames = load_frames(os.path.join(char_dir, data["file"]), data["frames"])
             boxes[name] = union_bbox(frames)
-        ref = boxes.get("idle") or boxes.get("walk") or next(iter(boxes.values()))
+        ref_name = next((n for n in ("idle", "walk") if n in boxes), next(iter(boxes)))
+        ref = boxes[ref_name]
         ref_h = max(ref[3] - ref[1], 1)
         pixel_size = TARGET_HEIGHT_M / float(ref_h)
-        anchor_x = (ref[0] + ref[2]) * 0.5     # idle 的水平中心
-        anchor_y = ref[3]                      # idle 的脚底
+        anchor_x = body_anchor_x(
+            load_frames(os.path.join(char_dir, anims[ref_name]["file"]), anims[ref_name]["frames"]))
+        anchor_y = ref[3]                      # 脚底
 
         for name, data in anims.items():
             box = boxes[name]

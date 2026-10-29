@@ -89,8 +89,34 @@ func test_hitbox_geometry_matches_melee_config() -> void:
             reach + body + margin * 2.0, 0.01)
     assert_float(box.size.z).override_failure_message("z 轴尺寸应覆盖纵深容差").is_equal_approx(
             lane * 2.0 + margin * 2.0, 0.01)
+    # y 只在顶部留 margin：底面必须贴地，不能钻到地板下面
     assert_float(box.size.y).override_failure_message("y 轴尺寸应覆盖命中高度").is_equal_approx(
-            height + margin * 2.0, 0.01)
+            height + margin, 0.01)
     # 盒子前沿 = reach + margin：再多就「隔空打人」，再少就漏判
     assert_float(hitbox.position.x + box.size.x * 0.5).override_failure_message(
             "判定盒前沿与 reach 不一致，视觉与判定会脱节").is_equal_approx(reach + margin, 0.01)
+
+## 判定盒必须从脚底开始。回归：形状节点在 .tscn 里带 (0, 0.9, 0)，Area 又被设到
+## hit_height/2，两处偏移叠加后盒子中心跑到 1.76 m —— 整个浮在头顶上方，
+## 打得到人却看起来完全没对上角色。
+func test_hitbox_starts_at_the_feet() -> void:
+    var runner := _boot()
+    await runner.simulate_frames(SPAWN_FRAMES)
+    var scene: Node = runner.scene()
+    var views: Dictionary = scene.get("_views")
+    var pid: int = int(scene.get("_player_id"))
+    var view: Node = views.get(pid, null)
+    assert_object(view).is_not_null()
+
+    var hitbox: Area3D = view.get_node_or_null("Hitbox") as Area3D
+    assert_object(hitbox).is_not_null()
+    var shape_node: CollisionShape3D = hitbox.get_node_or_null("CollisionShape3D") as CollisionShape3D
+    assert_object(shape_node).is_not_null()
+    var box: BoxShape3D = shape_node.shape as BoxShape3D
+    assert_object(box).is_not_null()
+
+    assert_float(shape_node.position.y).override_failure_message(
+            "形状节点自带 y 偏移会和 Area3D 的中心叠加，盒子会浮到头顶").is_equal_approx(0.0, 0.001)
+    var bottom: float = hitbox.position.y - box.size.y * 0.5
+    assert_float(bottom).override_failure_message(
+            "判定盒底面离地 %.2f m，应该贴着脚底" % bottom).is_equal_approx(0.0, 0.02)

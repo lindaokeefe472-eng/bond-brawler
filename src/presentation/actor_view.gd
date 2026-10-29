@@ -123,11 +123,16 @@ func _apply_hitbox_geometry() -> void:
     var margin: float = GameConstants.HITBOX_MARGIN
     var body: float = GameConstants.BODY_RADIUS
     var box := BoxShape3D.new()
-    # x：从身后 body 到身前 reach；z：纵深 ±lane；y：命中高度。
-    box.size = Vector3(reach + body + margin * 2.0, height + margin * 2.0, lane * 2.0 + margin * 2.0)
+    # x：从身后 body 到身前 reach；z：纵深 ±lane；y：脚底到命中高度。
+    # y 只在顶部留 margin：地面是硬边界，盒子不该钻到地板下面去。
+    var box_height: float = height + margin
+    box.size = Vector3(reach + body + margin * 2.0, box_height, lane * 2.0 + margin * 2.0)
     shape_node.shape = box
+    # 中心只由 Area3D 的 position 决定。形状节点自己再带一个 y 偏移就会叠加：
+    # .tscn 里是 (0, 0.9, 0)，Area 又被设到 0.86，盒子中心跑到 1.76 —— 整个浮在头顶。
+    shape_node.position = Vector3.ZERO
     _hitbox_center_x = (reach - body) * 0.5
-    _hitbox_height = height * 0.5
+    _hitbox_height = box_height * 0.5
 
 ## 从领域运行时读回本帧结果。GameRoot 在每次 BattleSession.tick 之后调用。
 func sync_from_runtime() -> void:

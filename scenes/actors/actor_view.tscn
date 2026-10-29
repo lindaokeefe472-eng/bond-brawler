@@ -10,7 +10,7 @@ radius = 0.42
 height = 1.8
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
-size = Vector3(2.4, 1.6, 1.8)
+size = Vector3(1.99, 1.66, 1.82)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hurt"]
 size = Vector3(0.9, 1.7, 0.9)
@@ -36,7 +36,6 @@ monitorable = false
 script = ExtResource("3_hitbox")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Hitbox"]
-position = Vector3(0, 0.9, 0)
 shape = SubResource("BoxShape3D_hit")
 debug_color = Color(1, 0.25, 0.2, 0.35)
 debug_fill = true

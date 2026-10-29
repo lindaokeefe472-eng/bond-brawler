@@ -67,6 +67,12 @@ python -I tools/gen_asset_spec.py
    所以用 `python -I tools/lint_gdscript.py` 兜底，提交前跑一遍。
 9. **类缓存**：删掉 `.godot/` 后直接跑游戏会报一堆 "Identifier XXX not declared"，
    因为 `global_script_class_cache.cfg` 还没生成。先 `--import` 再跑。
+10. **贴图锚点不是包围盒中心**：角色几乎都单手持械，刀剑会把包围盒中心拽到武器上
+   （knight 偏 0.43 m、skeleton 0.39 m）。`normalize_sprites.py` 取「列高 ≥ 最高列一半」
+   的列的中点当水平锚点。锚点偏了，判定盒看起来就往角色正前方错开半个身位。
+11. **`Sprite3D.flip_h` 只翻 UV，不翻四边形**：`offset` 是四边形的平移，翻转时不会跟着镜像。
+   所以 `SpriteBillboard` 必须按朝向把 `offset.x` 取反，否则一转身角色就滑到锚点另一侧
+   （实测 knight 差 0.85 m）。`test_sprite_billboard.gd::test_offset_mirrors_with_facing` 守着。
 
 ## 控制效果语义（踩过坑，别再改回去）
 
@@ -85,18 +91,21 @@ python -I tools/gen_asset_spec.py
 4. 连着挨打要重播受击动画（`ActorView.flash()` 里 `_sprite.restart()`），
    否则 `_last_anim` 已是 hurt，`_update_animation` 会提前返回，动画停在最后一帧。
 
-判定盒（Area3D）三条：
+判定盒（Area3D）四条：
 1. 尺寸/位置由 `melee_config()` 的 range / lane_tolerance / hit_height 现算，
    **不许写死在 .tscn 里**——写死过一次，出现 2.67 m 隔空命中。
 2. `monitoring` 常开（物理引擎要一帧才填重叠列表），但**形状只在起手+判定帧启用**，
    否则调试视图里会一直挂着一个方框。
 3. `HITBOX_MARGIN` 只覆盖浮点误差（0.06），不是「手感余量」，别调大。
+4. **中心只由 Area3D 的 position 决定**，形状节点必须留在原点。两处各带一个 y 偏移
+   会叠加（0.9 + 0.86 = 1.76），整个盒子浮到头顶，看着完全没对上角色。
+   盒子的 y 从脚底起算，margin 只往顶部放，别钻到地板下面。
 
 ## 当前状态
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-305 个测试（GdUnit4，44 个 suite）全绿，架构检查通过。
+315 个测试（GdUnit4，45 个 suite）全绿，架构检查通过。
 其中 4 个是场景端到端（真跑 main.tscn），10 个是领域端到端。
 
 待接入：真实关卡美术与视差背景、音效、联机同步、天赋 UI。
