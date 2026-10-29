@@ -347,6 +347,10 @@ func melee_config() -> Dictionary:
 		"hit_kind": HIT_KIND_LIGHT,
 	}
 
+## AI 性格参数（只读副本）。调试和测试用它确认「每只怪确实不一样」。
+func brain_profile() -> Dictionary:
+	return _brain_profile.duplicate(true)
+
 ## HUD 用：能量上限。
 func energy_max() -> float:
 	return _energy_max

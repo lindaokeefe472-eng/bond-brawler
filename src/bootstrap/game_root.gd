@@ -71,6 +71,7 @@ var _settings: SettingsModel = null
 var _audio: AudioDirector = null
 var _save: SaveService = null
 var _talents: TalentService = null
+var _stages: StageRepository = null
 ## 玩家死亡到弹出结算之间的缓冲，留给死亡动画。
 var _result_delay: float = -1.0
 var _actor_scene: PackedScene = null
@@ -110,6 +111,7 @@ func _build_services() -> void:
 	_data = _app.data
 	_species = _app.species
 	_skills = _app.skills
+	_stages = StageRepository.new(_data)
 	_type_chart = _app.combat_data.type_chart()
 	_melee_config = _app.melee_config
 	_session = _app.session
@@ -262,12 +264,33 @@ func _spawn_actors() -> void:
 	if player_view != null and _camera != null:
 		_camera.set_target(player_view)
 
+	var stage: StageDefinition = _stages.first() if _stages != null else null
+	if stage != null and stage.spawn_count() > 0:
+		_spawn_from_stage(stage, player_species)
+		return
+	_spawn_fallback(player_species)
+
+## 按关卡数据刷怪。每只怪的性格来自自己的 brain，不再是全局一套。
+func _spawn_from_stage(stage: StageDefinition, fallback_species: Dictionary) -> void:
+	for spawn: Dictionary in stage.spawns:
+		var species: Dictionary = _species.find(spawn.get("species", &""))
+		if species.is_empty():
+			species = fallback_species
+		var brain: Dictionary = stage.brain_profile(spawn.get("brain", StageDefinition.DEFAULT_BRAIN))
+		var character_id: String = str(spawn.get("character", ""))
+		var actor_id: int = _session.spawn_actor(_build_spec(
+			species, GameConstants.FACTION_ENEMY, spawn.get("plane_pos", Vector2.ZERO),
+			brain, character_id))
+		_create_view(actor_id, character_id)
+
+## 没有 data/stages.json 时的兜底，保证公开仓库（不含 data/）也能直接跑。
+func _spawn_fallback(fallback_species: Dictionary) -> void:
 	for i: int in range(ENEMY_SPAWNS.size()):
 		var character_id: String = str(ENEMY_CHARACTERS[i % ENEMY_CHARACTERS.size()])
 		var species_id: String = str(ENEMY_SPECIES_IDS[i % ENEMY_SPECIES_IDS.size()])
 		var species: Dictionary = _species.find(StringName(species_id))
 		if species.is_empty():
-			species = player_species
+			species = fallback_species
 		var spawn: Vector2 = ENEMY_SPAWNS[i]
 		var actor_id: int = _session.spawn_actor(_build_spec(
 			species, GameConstants.FACTION_ENEMY, spawn, ENEMY_BRAIN_PROFILE, character_id))

@@ -307,3 +307,25 @@ func test_save_is_wired_and_writes_snapshot() -> void:
 		for file_name: String in dir.get_files():
 			DirAccess.remove_absolute(temp_dir.path_join(file_name))
 	DirAccess.remove_absolute(temp_dir)
+
+## 刷怪表现在来自 data/stages.json，每只怪的性格可以不同 ——
+## 之前全局共用一套 ENEMY_BRAIN_PROFILE，三只怪行为一模一样。
+func test_enemies_use_per_spawn_brain_profiles() -> void:
+	var runner := _boot()
+	await runner.simulate_frames(SPAWN_FRAMES)
+	var scene: Node = runner.scene()
+	var session: BattleSession = scene.get("_session")
+	var pid: int = int(scene.get("_player_id"))
+	var aggressions: Array[float] = []
+	for id: int in session.actor_ids():
+		if id == pid:
+			continue
+		var actor: ActorRuntime = session.get_actor(id)
+		aggressions.append(float(actor.brain_profile().get("aggression", -1.0)))
+	assert_int(aggressions.size()).is_greater_equal(2)
+	var distinct: bool = false
+	for value: float in aggressions:
+		if not is_equal_approx(value, aggressions[0]):
+			distinct = true
+	assert_bool(distinct).override_failure_message(
+			"所有敌人还是共用一套 AI 性格").is_true()
