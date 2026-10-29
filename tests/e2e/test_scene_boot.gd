@@ -264,3 +264,29 @@ func test_scene_flow_pause_freezes_domain_clock() -> void:
 	assert_bool(flow.finish(false)).is_true()
 	assert_int(flow.state()).is_equal(SceneFlow.State.RESULT)
 	assert_bool(flow.is_playing()).is_false()
+
+## 音效链路：伤害事件必须真的落到 AudioDirector 上，而不是只在 FeedbackDirector 里计数。
+func test_damage_reaches_audio_director() -> void:
+	var runner := _boot()
+	await runner.simulate_frames(SPAWN_FRAMES)
+	var scene: Node = runner.scene()
+	var audio: AudioDirector = scene.get("_audio")
+	assert_object(audio).is_not_null()
+	var before: int = audio.play_count()
+	var session: BattleSession = scene.get("_session")
+	var pid: int = int(scene.get("_player_id"))
+	var enemy_id: int = 0
+	for id: int in session.actor_ids():
+		if id != pid:
+			enemy_id = id
+			break
+	assert_int(enemy_id).is_greater(0)
+	var player: ActorRuntime = session.get_actor(pid)
+	var request := CombatDamageRequest.new()
+	request.attacker_id = enemy_id
+	request.target_id = pid
+	request.power = 10.0
+	player.take_hit(request)
+	await runner.simulate_frames(3)
+	assert_int(audio.play_count()).override_failure_message(
+			"伤害事件没有传到 AudioDirector，音效链路是断的").is_greater(before)

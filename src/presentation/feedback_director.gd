@@ -27,6 +27,9 @@ func _ready() -> void:
 	# 顿帧期间 time_scale 为 0，本节点仍要能处理跳字与全屏闪。
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
+## 音效端口。为空时只计数不发声（headless 测试与缺资源时的降级路径）。
+var audio: IAudio = null
+
 func configure(camera: CameraRig, numbers: DamageNumberPool) -> void:
 	_camera = camera
 	_numbers = numbers
@@ -84,11 +87,13 @@ func screen_flash(color: Color, duration: float) -> void:
 	_overlay_total = duration
 	_overlay.color = color
 
-## 音效占位：记录请求供后续 AudioDirector 消费，不在这里加载音频资源。
+## 音效：转给 IAudio 端口。计数保留下来，测试可以脱离音频后端断言。
 func play_sfx(cue: StringName, position: Vector2 = Vector2.ZERO) -> void:
 	_sfx_requests += 1
 	_last_sfx_cue = cue
 	_last_sfx_position = position
+	if audio != null:
+		audio.play(cue, position)
 
 func sfx_request_count() -> int:
 	return _sfx_requests

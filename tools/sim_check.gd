@@ -11,6 +11,12 @@ func _initialize() -> void:
 
 func _process(_delta: float) -> bool:
 	_frames += 1
+	# 游戏现在从标题界面开始，先把流程推进到 PLAYING，否则整局都不 tick。
+	if _frames == 2:
+		var flow: SceneFlow = _scene.get("_flow")
+		if flow != null:
+			flow.start()
+		return false
 	if _frames % 120 != 0 and _frames != FRAMES:
 		return false
 	var root_node: Node = _scene

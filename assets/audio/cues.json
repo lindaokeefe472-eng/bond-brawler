@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "_comment": [
+    "事件 -> 音效 id -> 资源路径 -> 音量/随机音调。cue 名必须覆盖 GameConstants.SFX_CUES，",
+    "否则 tests/unit/infrastructure/test_audio_library.gd 会报缺音。",
+    "pitch_jitter：每次播放的音高随机幅度（±比例），连打时不会像机关枪。",
+    "debounce：同一 cue 的最短间隔（秒），0 表示不限。",
+    "voices：同一 cue 同时最多几个实例。"
+  ],
+  "buses": [
+    "master",
+    "sfx",
+    "bgm",
+    "ui"
+  ],
+  "cues": {
+    "hit": {
+      "file": "res://assets/audio/sfx/hit.wav",
+      "bus": "sfx",
+      "volume_db": -6.0,
+      "pitch_jitter": 0.08,
+      "debounce": 0.04,
+      "voices": 4
+    },
+    "crit": {
+      "file": "res://assets/audio/sfx/crit.wav",
+      "bus": "sfx",
+      "volume_db": -3.0,
+      "pitch_jitter": 0.05,
+      "debounce": 0.04,
+      "voices": 3
+    },
+    "guard": {
+      "file": "res://assets/audio/sfx/guard.wav",
+      "bus": "sfx",
+      "volume_db": -8.0,
+      "pitch_jitter": 0.06,
+      "debounce": 0.05,
+      "voices": 2
+    },
+    "dodge": {
+      "file": "res://assets/audio/sfx/dodge.wav",
+      "bus": "sfx",
+      "volume_db": -10.0,
+      "pitch_jitter": 0.1,
+      "debounce": 0.05,
+      "voices": 2
+    },
+    "cast": {
+      "file": "res://assets/audio/sfx/cast.wav",
+      "bus": "sfx",
+      "volume_db": -6.0,
+      "pitch_jitter": 0.06,
+      "debounce": 0.08,
+      "voices": 3
+    },
+    "hurt": {
+      "file": "res://assets/audio/sfx/hurt.wav",
+      "bus": "sfx",
+      "volume_db": -7.0,
+      "pitch_jitter": 0.07,
+      "debounce": 0.05,
+      "voices": 3
+    },
+    "death": {
+      "file": "res://assets/audio/sfx/death.wav",
+      "bus": "sfx",
+      "volume_db": -3.0,
+      "pitch_jitter": 0.04,
+      "debounce": 0.2,
+      "voices": 2
+    },
+    "ui_click": {
+      "file": "res://assets/audio/sfx/ui_click.wav",
+      "bus": "ui",
+      "volume_db": -12.0,
+      "pitch_jitter": 0.0,
+      "debounce": 0.03,
+      "voices": 2
+    }
+  }
+}

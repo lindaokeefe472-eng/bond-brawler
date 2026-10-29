@@ -12,6 +12,8 @@ const DIMMER_COLOR: Color = Color(0.02, 0.02, 0.04, 0.72)
 var on_start: Callable = Callable()
 var on_toggle_pause: Callable = Callable()
 var on_restart: Callable = Callable()
+## func(channel: StringName, value: float)，由 GameRoot 接到音频总线上。
+var on_volume_changed: Callable = Callable()
 
 var _flow: SceneFlow = null
 var _settings: SettingsModel = null
@@ -132,7 +134,9 @@ func _build() -> void:
 		slider.custom_minimum_size = Vector2(96.0, 18.0)
 		slider.value_changed.connect(func(value: float) -> void:
 			if _settings != null:
-				_settings.set_volume(channel, value))
+				_settings.set_volume(channel, value)
+			if on_volume_changed.is_valid():
+				on_volume_changed.call(channel, value))
 		_settings_box.add_child(slider)
 		_volume_sliders[channel] = slider
 	_language_label = Label.new()

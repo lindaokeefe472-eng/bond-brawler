@@ -60,6 +60,12 @@ const SHAKE_HEAVY: float = 0.45
 
 # ---------------------------------------------------------------- 事件命名
 ## 领域事件统一使用 "<上下文>.<过去式>" 命名，全部小写点分。
+## 全部音效 cue。data/audio.json 必须覆盖这里的每一项，
+## 少一条就是某个事件永远没声音，而且不会有任何报错。
+const SFX_CUES: Array[StringName] = [
+	&"hit", &"crit", &"guard", &"dodge", &"cast", &"hurt", &"death", &"ui_click",
+]
+
 const EVT_ACTOR_SPAWNED: StringName = &"actor.spawned"
 const EVT_ACTOR_DIED: StringName = &"actor.died"
 const EVT_DAMAGE_APPLIED: StringName = &"combat.damage_applied"

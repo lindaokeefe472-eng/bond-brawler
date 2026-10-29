@@ -68,6 +68,7 @@ var _hud: HudView = null
 var _flow: SceneFlow = null
 var _flow_view: FlowView = null
 var _settings: SettingsModel = null
+var _audio: AudioDirector = null
 ## 玩家死亡到弹出结算之间的缓冲，留给死亡动画。
 var _result_delay: float = -1.0
 var _actor_scene: PackedScene = null
@@ -82,6 +83,7 @@ var _broadphase_hits: int = 0
 
 func _ready() -> void:
 	_build_services()
+	_build_audio()
 	_build_arena()
 	_build_projectiles()
 	_build_feedback()
@@ -112,6 +114,11 @@ func _build_tuner() -> void:
 	_tuner.name = "HitboxTuner"
 	add_child(_tuner)
 
+## 音效：库里只有数据，真正发声在 AudioDirector。
+func _build_audio() -> void:
+	_audio = AudioDirector.new()
+	_audio.configure(AudioLibrary.new(_data), self)
+
 func _build_arena() -> void:
 	_arena = ArenaBuilder.new(self)
 	_arena.build()
@@ -127,11 +134,27 @@ func _build_flow() -> void:
 	_flow_view.on_toggle_pause = _on_flow_toggle_pause
 	_flow_view.on_restart = _on_flow_restart
 	_settings = SettingsModel.new()
+	_flow_view.on_volume_changed = _on_volume_changed
 	_flow_view.bind_settings(_settings)
+	_apply_settings_volumes()
 	_flow_view.bind(_flow)
 	_sync_hud_visibility()
 
+## 设置里的音量落到总线上。阶段 4 接存档后，这里改成从存档读初值。
+func _on_volume_changed(channel: StringName, value: float) -> void:
+	if _audio == null:
+		return
+	_audio.set_bus_volume(channel, value)
+
+func _apply_settings_volumes() -> void:
+	if _audio == null or _settings == null:
+		return
+	for channel: StringName in SettingsModel.CHANNELS:
+		_audio.set_bus_volume(channel, _settings.volume(channel))
+
 func _on_flow_start() -> void:
+	if _audio != null:
+		_audio.play(&"ui_click")
 	if _flow != null and _flow.start():
 		_flow_view.render(_flow)
 		_sync_hud_visibility()
@@ -181,12 +204,14 @@ func _build_feedback() -> void:
 	_feedback.name = "FeedbackDirector"
 	add_child(_feedback)
 	_feedback.configure(_camera, _numbers)
+	_feedback.audio = _audio
 
 func _bind_events() -> void:
 	_bus.subscribe(GameConstants.EVT_DAMAGE_APPLIED, _on_damage_applied)
 	_bus.subscribe(GameConstants.EVT_ACTOR_GUARDED, _on_actor_guarded)
 	_bus.subscribe(GameConstants.EVT_ACTOR_DODGED, _on_actor_dodged)
 	_bus.subscribe(GameConstants.EVT_ACTOR_DIED, _on_actor_died)
+	_bus.subscribe(GameConstants.EVT_SKILL_ACTIVATED, _on_skill_activated)
 
 func _load_assets() -> void:
 	_actor_scene = load(ACTOR_SCENE_PATH) as PackedScene
@@ -384,6 +409,11 @@ func _physics_process(delta: float) -> void:
 				_flow_view.render(_flow)
 				_sync_hud_visibility()
 
+## 音频时钟：debounce 依赖它。放在 _process 里，暂停时也跟着停。
+func _process(delta: float) -> void:
+	if _audio != null:
+		_audio.tick(delta)
+
 func _sync_views() -> void:
 	for key: Variant in _views.keys():
 		var view: ActorView = _views[key]
@@ -417,11 +447,19 @@ func _on_damage_applied(event: DomainEvent) -> void:
 	_feedback.hit_flash(target_id, CRIT_FLASH_COLOR if is_crit else HIT_FLASH_COLOR)
 	_feedback.hit_stop(_hitstop_for(hit_kind, is_crit))
 	_feedback.camera_shake(_shake_for(hit_kind, is_crit), SHAKE_DURATION)
-	_feedback.play_sfx(&"hit", Vector2.ZERO)
+	_feedback.play_sfx(&"crit" if is_crit else &"hit", Vector2.ZERO)
+	if target_id == _player_id:
+		_feedback.play_sfx(&"hurt", Vector2.ZERO)
 	if is_crit:
 		_feedback.screen_flash(CRIT_FLASH_COLOR, SCREEN_FLASH_SECONDS)
 	elif is_lethal:
 		_feedback.screen_flash(LETHAL_FLASH_COLOR, SCREEN_FLASH_SECONDS)
+
+## 技能出手：给一发 cast，和命中音区分开，玩家能听出「放了」和「打到了」。
+func _on_skill_activated(event: DomainEvent) -> void:
+	if _feedback == null or event == null:
+		return
+	_feedback.play_sfx(&"cast", Vector2.ZERO)
 
 func _on_actor_guarded(event: DomainEvent) -> void:
 	if _feedback == null:
@@ -476,6 +514,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		print("[debug] 碰撞形状显示: %s" % str(tree.debug_collisions_hint))
 
 func _exit_tree() -> void:
+	if _audio != null:
+		_audio.dispose()
+		_audio = null
 	if _hud_presenter != null:
 		_hud_presenter.unbind()
 		_hud_presenter = null
