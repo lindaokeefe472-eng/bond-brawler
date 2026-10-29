@@ -6,21 +6,21 @@ var _now: float = 0.0
 var _delta: float = GameConstants.TICK_DELTA
 
 func _init(start: float = 0.0) -> void:
-    _now = start
+	_now = start
 
 func now() -> float:
-    return _now
+	return _now
 
 func delta() -> float:
-    return _delta
+	return _delta
 
 func advance(seconds: float) -> float:
-    _delta = seconds
-    _now += seconds
-    return _now
+	_delta = seconds
+	_now += seconds
+	return _now
 
 func advance_ticks(count: int) -> float:
-    return advance(float(count) * GameConstants.TICK_DELTA)
+	return advance(float(count) * GameConstants.TICK_DELTA)
 
 func set_time(value: float) -> void:
-    _now = value
+	_now = value

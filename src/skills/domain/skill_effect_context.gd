@@ -16,23 +16,23 @@ var stats_provider: Callable = Callable()
 var emit: Callable = Callable()
 
 func _init(p_caster_id: int = 0,
-        p_target_ids: Array[int] = [],
-        p_origin: Vector2 = Vector2.ZERO,
-        p_facing: int = 1,
-        p_rng: IRng = null,
-        p_stats_provider: Callable = Callable(),
-        p_emit: Callable = Callable()) -> void:
-    caster_id = p_caster_id
-    # 复制一份，避免效果器之间或调用方后续改动互相影响。
-    target_ids = p_target_ids.duplicate()
-    origin = p_origin
-    facing = p_facing if p_facing != 0 else 1
-    rng = p_rng
-    stats_provider = p_stats_provider
-    emit = p_emit
+		p_target_ids: Array[int] = [],
+		p_origin: Vector2 = Vector2.ZERO,
+		p_facing: int = 1,
+		p_rng: IRng = null,
+		p_stats_provider: Callable = Callable(),
+		p_emit: Callable = Callable()) -> void:
+	caster_id = p_caster_id
+	# 复制一份，避免效果器之间或调用方后续改动互相影响。
+	target_ids = p_target_ids.duplicate()
+	origin = p_origin
+	facing = p_facing if p_facing != 0 else 1
+	rng = p_rng
+	stats_provider = p_stats_provider
+	emit = p_emit
 
 ## 统一出口：效果器只调这里，null 检查只写一次。
 func emit_event(type: StringName, payload: Dictionary) -> void:
-    if not emit.is_valid():
-        return
-    emit.call(DomainEvent.new(type, payload))
+	if not emit.is_valid():
+		return
+	emit.call(DomainEvent.new(type, payload))

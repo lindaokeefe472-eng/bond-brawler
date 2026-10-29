@@ -20,4 +20,4 @@ var time: float = 0.0
 
 ## 没有目标时只能待机。把这条判断收敛在这里，避免调用方各自重复写 target_id >= 0。
 func has_target() -> bool:
-    return target_id >= 0
+	return target_id >= 0

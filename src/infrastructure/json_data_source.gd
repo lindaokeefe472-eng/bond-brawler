@@ -14,50 +14,50 @@ var _text_cache: Dictionary = {}   # 完整路径 -> 原始文本
 var _json_cache: Dictionary = {}   # 完整路径 -> 解析结果（Dictionary / Array / ...）
 
 func _init(root: String = "res://data") -> void:
-    _root = root.trim_suffix("/")
+	_root = root.trim_suffix("/")
 
 func exists(path: String) -> bool:
-    return FileAccess.file_exists(_resolve(path))
+	return FileAccess.file_exists(_resolve(path))
 
 func read_text(path: String) -> String:
-    var full: String = _resolve(path)
-    if _text_cache.has(full):
-        return str(_text_cache[full])
-    var file: FileAccess = FileAccess.open(full, FileAccess.READ)
-    if file == null:
-        push_warning("JsonDataSource: 无法读取 %s（错误码 %d）" % [full, FileAccess.get_open_error()])
-        return ""
-    var text: String = file.get_as_text()
-    file.close()
-    _text_cache[full] = text
-    return text
+	var full: String = _resolve(path)
+	if _text_cache.has(full):
+		return str(_text_cache[full])
+	var file: FileAccess = FileAccess.open(full, FileAccess.READ)
+	if file == null:
+		push_warning("JsonDataSource: 无法读取 %s（错误码 %d）" % [full, FileAccess.get_open_error()])
+		return ""
+	var text: String = file.get_as_text()
+	file.close()
+	_text_cache[full] = text
+	return text
 
 func read_json(path: String) -> Variant:
-    var full: String = _resolve(path)
-    if _json_cache.has(full):
-        return _json_cache[full]
-    var text: String = read_text(path)
-    if text.is_empty():
-        return {}
-    var parser := JSON.new()
-    var err: int = parser.parse(text)
-    if err != OK:
-        # 把失败结果也缓存下来：坏文件不该每帧重试并刷屏告警。
-        push_warning("JsonDataSource: %s 解析失败（第 %d 行：%s），回退为空字典"
-            % [full, parser.get_error_line(), parser.get_error_message()])
-        _json_cache[full] = {}
-        return {}
-    _json_cache[full] = parser.data
-    return parser.data
+	var full: String = _resolve(path)
+	if _json_cache.has(full):
+		return _json_cache[full]
+	var text: String = read_text(path)
+	if text.is_empty():
+		return {}
+	var parser := JSON.new()
+	var err: int = parser.parse(text)
+	if err != OK:
+		# 把失败结果也缓存下来：坏文件不该每帧重试并刷屏告警。
+		push_warning("JsonDataSource: %s 解析失败（第 %d 行：%s），回退为空字典"
+			% [full, parser.get_error_line(), parser.get_error_message()])
+		_json_cache[full] = {}
+		return {}
+	_json_cache[full] = parser.data
+	return parser.data
 
 ## 热重载与测试隔离用：清空后下次读取会重新访问磁盘。
 func clear_cache() -> void:
-    _text_cache.clear()
-    _json_cache.clear()
+	_text_cache.clear()
+	_json_cache.clear()
 
 ## 带协议前缀的路径（res:// / user://）或系统绝对路径原样使用，其余拼到根目录。
 ## 这样仓库层能用短名字，测试也能直接指向临时文件，不必再造一个数据源子类。
 func _resolve(path: String) -> String:
-    if path.begins_with("res://") or path.begins_with("user://") or path.is_absolute_path():
-        return path
-    return _root.path_join(path)
+	if path.begins_with("res://") or path.begins_with("user://") or path.is_absolute_path():
+		return path
+	return _root.path_join(path)

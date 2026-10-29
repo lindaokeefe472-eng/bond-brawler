@@ -5,10 +5,10 @@ extends RefCounted
 
 ## 当前模拟时间（秒，从会话开始累计）。
 func now() -> float:
-    push_error("IClock.now() 未实现")
-    return 0.0
+	push_error("IClock.now() 未实现")
+	return 0.0
 
 ## 上一逻辑步的步长（秒）。
 func delta() -> float:
-    push_error("IClock.delta() 未实现")
-    return GameConstants.TICK_DELTA
+	push_error("IClock.delta() 未实现")
+	return GameConstants.TICK_DELTA

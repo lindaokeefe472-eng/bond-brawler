@@ -23,38 +23,38 @@ const MOVE_DEADZONE: float = 0.2
 
 ## 采样当前帧。跳跃/冲刺/攻击/技能用「按下沿」，格挡用「按住」。
 func poll() -> LocoInputFrame:
-    var raw_move := Vector2(
-        Input.get_action_strength(ACTION_MOVE_RIGHT) - Input.get_action_strength(ACTION_MOVE_LEFT),
-        Input.get_action_strength(ACTION_MOVE_DOWN) - Input.get_action_strength(ACTION_MOVE_UP))
-    var skills: Array[bool] = []
-    for action: StringName in SKILL_ACTIONS:
-        skills.append(Input.is_action_just_pressed(action))
-    return build_frame(
-        raw_move,
-        Input.is_action_just_pressed(ACTION_JUMP),
-        Input.is_action_just_pressed(ACTION_DASH),
-        Input.is_action_just_pressed(ACTION_ATTACK),
-        Input.is_action_pressed(ACTION_GUARD),
-        skills)
+	var raw_move := Vector2(
+		Input.get_action_strength(ACTION_MOVE_RIGHT) - Input.get_action_strength(ACTION_MOVE_LEFT),
+		Input.get_action_strength(ACTION_MOVE_DOWN) - Input.get_action_strength(ACTION_MOVE_UP))
+	var skills: Array[bool] = []
+	for action: StringName in SKILL_ACTIONS:
+		skills.append(Input.is_action_just_pressed(action))
+	return build_frame(
+		raw_move,
+		Input.is_action_just_pressed(ACTION_JUMP),
+		Input.is_action_just_pressed(ACTION_DASH),
+		Input.is_action_just_pressed(ACTION_ATTACK),
+		Input.is_action_pressed(ACTION_GUARD),
+		skills)
 
 ## 长度超过 1 时归一化；小于死区归零；介于两者之间保留摇杆的力度。
 static func normalize_move(raw: Vector2, deadzone: float = MOVE_DEADZONE) -> Vector2:
-    var length: float = raw.length()
-    if length < deadzone:
-        return Vector2.ZERO
-    if length > 1.0:
-        return raw / length
-    return raw
+	var length: float = raw.length()
+	if length < deadzone:
+		return Vector2.ZERO
+	if length > 1.0:
+		return raw / length
+	return raw
 
 ## 纯函数入口：不碰 Input 单例，方便单测与回放注入。
 static func build_frame(raw_move: Vector2, jump: bool, dash: bool, attack: bool,
-        guard: bool, skills: Array) -> LocoInputFrame:
-    var frame: LocoInputFrame = LocoInputFrame.empty()
-    frame.move = normalize_move(raw_move)
-    frame.jump = jump
-    frame.dash = dash
-    frame.attack = attack
-    frame.guard = guard
-    for slot: int in range(mini(skills.size(), LocoInputFrame.SKILL_SLOTS)):
-        frame.skills[slot] = bool(skills[slot])
-    return frame
+		guard: bool, skills: Array) -> LocoInputFrame:
+	var frame: LocoInputFrame = LocoInputFrame.empty()
+	frame.move = normalize_move(raw_move)
+	frame.jump = jump
+	frame.dash = dash
+	frame.attack = attack
+	frame.guard = guard
+	for slot: int in range(mini(skills.size(), LocoInputFrame.SKILL_SLOTS)):
+		frame.skills[slot] = bool(skills[slot])
+	return frame

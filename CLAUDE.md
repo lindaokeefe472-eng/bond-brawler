@@ -47,7 +47,8 @@ python -I tools/gen_asset_spec.py
 - 新增领域逻辑必须带单元测试，`tools/test.sh` 必须保持退出码 0。
 - 数值不得硬编码，放 `data/` 或 `GameConstants`。
 - 只在 `src/bootstrap/` 里 `new` 具体实现（`CompositionRoot` 装配，`GameRoot` 消费）。
-- 4 空格缩进；浮点用 `assert_almost_eq`，`Vector2` 分量是 32 位。
+- **Tab 缩进**。Godot 的 `--import` 会把脚本里的空格缩进自动改回 Tab，用空格等于每次导入都产生一堆无意义 diff。
+- 浮点用 `assert_almost_eq`，`Vector2` 分量是 32 位。
 
 ## 踩过的坑（别重复踩）
 

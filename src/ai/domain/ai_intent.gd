@@ -23,10 +23,10 @@ var skill_slot: int = -1
 var desired_pos: Vector2 = Vector2.ZERO
 
 static func make(intent_kind: StringName, intent_target_id: int = -1,
-        intent_skill_slot: int = -1, intent_desired_pos: Vector2 = Vector2.ZERO) -> AiIntent:
-    var intent := AiIntent.new()
-    intent.kind = intent_kind
-    intent.target_id = intent_target_id
-    intent.skill_slot = intent_skill_slot
-    intent.desired_pos = intent_desired_pos
-    return intent
+		intent_skill_slot: int = -1, intent_desired_pos: Vector2 = Vector2.ZERO) -> AiIntent:
+	var intent := AiIntent.new()
+	intent.kind = intent_kind
+	intent.target_id = intent_target_id
+	intent.skill_slot = intent_skill_slot
+	intent.desired_pos = intent_desired_pos
+	return intent

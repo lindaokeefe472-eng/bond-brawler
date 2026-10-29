@@ -20,15 +20,15 @@ var guard: bool = false
 var skills: Array[bool] = [false, false, false, false]
 
 static func empty() -> LocoInputFrame:
-    return LocoInputFrame.new()
+	return LocoInputFrame.new()
 
 ## 夹取后的移动向量。采集方应已归一化，这里只做最后一道防线。
 func clamped_move() -> Vector2:
-    return Vector2(
-        clampf(move.x, MOVE_MIN, MOVE_MAX),
-        clampf(move.y, MOVE_MIN, MOVE_MAX)
-    )
+	return Vector2(
+		clampf(move.x, MOVE_MIN, MOVE_MAX),
+		clampf(move.y, MOVE_MIN, MOVE_MAX)
+	)
 
 ## 是否有方向输入；纵深移动同样算「在动」，否则侧向走位会播成待机。
 func has_move() -> bool:
-    return clamped_move().length_squared() > MOVE_DEADZONE_SQUARED
+	return clamped_move().length_squared() > MOVE_DEADZONE_SQUARED

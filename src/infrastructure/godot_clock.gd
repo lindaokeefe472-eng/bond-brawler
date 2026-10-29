@@ -11,18 +11,18 @@ var _last_now: float = 0.0
 var _last_delta: float = GameConstants.TICK_DELTA
 
 func _init() -> void:
-    _start_msec = Time.get_ticks_msec()
-    _last_now = 0.0
-    # 首次 now() 之前就调用 delta() 也要有合理值，否则编排层会拿到 0 秒的空步。
-    _last_delta = GameConstants.TICK_DELTA
+	_start_msec = Time.get_ticks_msec()
+	_last_now = 0.0
+	# 首次 now() 之前就调用 delta() 也要有合理值，否则编排层会拿到 0 秒的空步。
+	_last_delta = GameConstants.TICK_DELTA
 
 func now() -> float:
-    var seconds: float = float(Time.get_ticks_msec() - _start_msec) / 1000.0
-    # 适配器拿不到 SceneTree 的帧 delta，两次采样之间的间隔就是它能观测到的
-    # 最接近「上一逻辑步」的量；用 maxf 兜住同毫秒内重复采样的 0 值。
-    _last_delta = maxf(seconds - _last_now, 0.0)
-    _last_now = seconds
-    return seconds
+	var seconds: float = float(Time.get_ticks_msec() - _start_msec) / 1000.0
+	# 适配器拿不到 SceneTree 的帧 delta，两次采样之间的间隔就是它能观测到的
+	# 最接近「上一逻辑步」的量；用 maxf 兜住同毫秒内重复采样的 0 值。
+	_last_delta = maxf(seconds - _last_now, 0.0)
+	_last_now = seconds
+	return seconds
 
 func delta() -> float:
-    return _last_delta
+	return _last_delta

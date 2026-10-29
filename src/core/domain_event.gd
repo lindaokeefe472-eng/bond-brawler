@@ -9,17 +9,17 @@ var payload: Dictionary
 var sequence: int = 0
 
 func _init(p_type: StringName, p_payload: Dictionary = {}) -> void:
-    type = p_type
-    payload = p_payload.duplicate(false)
+	type = p_type
+	payload = p_payload.duplicate(false)
 
 static func make(p_type: StringName, p_payload: Dictionary = {}) -> DomainEvent:
-    return DomainEvent.new(p_type, p_payload)
+	return DomainEvent.new(p_type, p_payload)
 
 func get_value(key: StringName, fallback: Variant = null) -> Variant:
-    return payload.get(key, fallback)
+	return payload.get(key, fallback)
 
 func has(key: StringName) -> bool:
-    return payload.has(key)
+	return payload.has(key)
 
 func _to_string() -> String:
-    return "#%d %s %s" % [sequence, type, payload]
+	return "#%d %s %s" % [sequence, type, payload]

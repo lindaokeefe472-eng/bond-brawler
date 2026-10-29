@@ -11,29 +11,29 @@ var can_crit: bool = true
 var tags: Array = []
 
 func _init(p_power: float = 0.0,
-        p_damage_type: StringName = &"neutral",
-        p_knockback: float = 0.0,
-        p_hit_kind: StringName = &"skill",
-        p_can_crit: bool = true,
-        p_tags: Array = []) -> void:
-    power = p_power
-    damage_type = p_damage_type
-    knockback = p_knockback
-    hit_kind = p_hit_kind
-    can_crit = p_can_crit
-    tags = p_tags.duplicate()
+		p_damage_type: StringName = &"neutral",
+		p_knockback: float = 0.0,
+		p_hit_kind: StringName = &"skill",
+		p_can_crit: bool = true,
+		p_tags: Array = []) -> void:
+	power = p_power
+	damage_type = p_damage_type
+	knockback = p_knockback
+	hit_kind = p_hit_kind
+	can_crit = p_can_crit
+	tags = p_tags.duplicate()
 
 func apply(ctx: SkillEffectContext) -> void:
-    if ctx == null:
-        return
-    for target_id: int in ctx.target_ids:
-        ctx.emit_event(EVT_DAMAGE, {
-            "attacker_id": ctx.caster_id,
-            "target_id": target_id,
-            "power": power,
-            "damage_type": damage_type,
-            "hit_kind": hit_kind,
-            "knockback": knockback,
-            "can_crit": can_crit,
-            "tags": tags.duplicate(),
-        })
+	if ctx == null:
+		return
+	for target_id: int in ctx.target_ids:
+		ctx.emit_event(EVT_DAMAGE, {
+			"attacker_id": ctx.caster_id,
+			"target_id": target_id,
+			"power": power,
+			"damage_type": damage_type,
+			"hit_kind": hit_kind,
+			"knockback": knockback,
+			"can_crit": can_crit,
+			"tags": tags.duplicate(),
+		})

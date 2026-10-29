@@ -15,6 +15,6 @@ var invulnerable: bool = false
 var can_be_interrupted: bool = true
 
 func _to_string() -> String:
-    return "LocoActionOutput(state=%s, pos=%s, h=%.3f, v=%s)" % [
-        LocoActionState.name_of(state), plane_pos, height, velocity
-    ]
+	return "LocoActionOutput(state=%s, pos=%s, h=%.3f, v=%s)" % [
+		LocoActionState.name_of(state), plane_pos, height, velocity
+	]

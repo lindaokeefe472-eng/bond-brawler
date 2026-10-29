@@ -6,9 +6,9 @@ class_name AiConsideration
 extends RefCounted
 
 enum ScoreCurve {
-    LINEAR,     # 原始分直接使用
-    INVERSE,    # 取反：原始分越高，得分越低（例如「距离越远越不想打」）
-    THRESHOLD,  # 过阈值给满分，否则 0（invert 时改为「低于阈值给满分」）
+	LINEAR,     # 原始分直接使用
+	INVERSE,    # 取反：原始分越高，得分越低（例如「距离越远越不想打」）
+	THRESHOLD,  # 过阈值给满分，否则 0（invert 时改为「低于阈值给满分」）
 }
 
 const DEFAULT_THRESHOLD: float = 0.5
@@ -23,36 +23,36 @@ var threshold: float = DEFAULT_THRESHOLD
 var invert: bool = false
 
 static func make(scoring_fn: Callable, weight_value: float = 1.0,
-        curve_kind: int = ScoreCurve.LINEAR, threshold_value: float = DEFAULT_THRESHOLD,
-        invert_value: bool = false) -> AiConsideration:
-    var consideration := AiConsideration.new()
-    consideration.scoring = scoring_fn
-    consideration.weight = weight_value
-    consideration.curve = curve_kind
-    consideration.threshold = threshold_value
-    consideration.invert = invert_value
-    return consideration
+		curve_kind: int = ScoreCurve.LINEAR, threshold_value: float = DEFAULT_THRESHOLD,
+		invert_value: bool = false) -> AiConsideration:
+	var consideration := AiConsideration.new()
+	consideration.scoring = scoring_fn
+	consideration.weight = weight_value
+	consideration.curve = curve_kind
+	consideration.threshold = threshold_value
+	consideration.invert = invert_value
+	return consideration
 
 ## 曲线整形前的原始分。无效 Callable 视为 0，避免坏配置让整局 AI 崩掉。
 func raw_score(bb: AiBlackboard) -> float:
-    if not scoring.is_valid():
-        return 0.0
-    var value: Variant = scoring.call(bb)
-    if value == null:
-        return 0.0
-    return clampf(float(value), 0.0, 1.0)
+	if not scoring.is_valid():
+		return 0.0
+	var value: Variant = scoring.call(bb)
+	if value == null:
+		return 0.0
+	return clampf(float(value), 0.0, 1.0)
 
 func score(bb: AiBlackboard) -> float:
-    var raw: float = raw_score(bb)
-    match curve:
-        ScoreCurve.INVERSE:
-            return 1.0 - raw
-        ScoreCurve.THRESHOLD:
-            if invert:
-                return 1.0 if raw <= threshold else 0.0
-            return 1.0 if raw >= threshold else 0.0
-        _:
-            return raw
+	var raw: float = raw_score(bb)
+	match curve:
+		ScoreCurve.INVERSE:
+			return 1.0 - raw
+		ScoreCurve.THRESHOLD:
+			if invert:
+				return 1.0 if raw <= threshold else 0.0
+			return 1.0 if raw >= threshold else 0.0
+		_:
+			return raw
 
 func weighted_score(bb: AiBlackboard) -> float:
-    return weight * score(bb)
+	return weight * score(bb)

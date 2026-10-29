@@ -15,40 +15,40 @@ var _actions: Dictionary = {}
 var _combat_params: Dictionary = {}
 
 func _init(data: IDataSource) -> void:
-    _load_type_chart(data)
-    _actions = _read_dict(data, "actions.json")
-    _combat_params = _read_dict(data, "combat_params.json")
+	_load_type_chart(data)
+	_actions = _read_dict(data, "actions.json")
+	_combat_params = _read_dict(data, "combat_params.json")
 
 ## 永远非 null：数据缺失时也会构造一张「全 1.0」的克制表，战斗照常能跑。
 func type_chart() -> CombatTypeChart:
-    return _type_chart
+	return _type_chart
 
 func type_names() -> Dictionary:
-    return _type_names
+	return _type_names
 
 func actions() -> Dictionary:
-    return _actions
+	return _actions
 
 func combat_params() -> Dictionary:
-    return _combat_params
+	return _combat_params
 
 func _load_type_chart(data: IDataSource) -> void:
-    var raw: Variant = data.read_json("type_chart.json")
-    var chart: Dictionary = {}
-    if raw is Dictionary:
-        var doc: Dictionary = raw
-        _type_names = _as_dict(doc.get("names", {}))
-        chart = _as_dict(doc.get("chart", {}))
-    else:
-        push_warning("CombatDataRepository: type_chart.json 格式异常，克制表按全 1.0 处理")
-    _type_chart = CombatTypeChart.new(chart, _type_names)
+	var raw: Variant = data.read_json("type_chart.json")
+	var chart: Dictionary = {}
+	if raw is Dictionary:
+		var doc: Dictionary = raw
+		_type_names = _as_dict(doc.get("names", {}))
+		chart = _as_dict(doc.get("chart", {}))
+	else:
+		push_warning("CombatDataRepository: type_chart.json 格式异常，克制表按全 1.0 处理")
+	_type_chart = CombatTypeChart.new(chart, _type_names)
 
 func _read_dict(data: IDataSource, file_name: String) -> Dictionary:
-    var raw: Variant = data.read_json(file_name)
-    if raw is Dictionary:
-        return raw
-    push_warning("CombatDataRepository: %s 缺失或格式异常，回退为空字典" % file_name)
-    return {}
+	var raw: Variant = data.read_json(file_name)
+	if raw is Dictionary:
+		return raw
+	push_warning("CombatDataRepository: %s 缺失或格式异常，回退为空字典" % file_name)
+	return {}
 
 func _as_dict(value: Variant) -> Dictionary:
-    return value if value is Dictionary else {}
+	return value if value is Dictionary else {}

@@ -9,25 +9,25 @@ var stacks: int = 1
 var chance: float = 1.0
 
 func _init(p_status: StringName = &"", p_duration: float = 0.0, p_stacks: int = 1, p_chance: float = 1.0) -> void:
-    status = p_status
-    duration = p_duration
-    stacks = p_stacks
-    chance = p_chance
+	status = p_status
+	duration = p_duration
+	stacks = p_stacks
+	chance = p_chance
 
 func apply(ctx: SkillEffectContext) -> void:
-    if ctx == null or status == &"":
-        return
-    var always: bool = chance >= 1.0
-    if not always:
-        if ctx.rng == null:
-            return
-    for target_id: int in ctx.target_ids:
-        if not always and not ctx.rng.chance(chance):
-            continue
-        ctx.emit_event(EVT_STATUS_APPLIED, {
-            "actor_id": target_id,
-            "source_id": ctx.caster_id,
-            "status": status,
-            "duration": duration,
-            "stacks": stacks,
-        })
+	if ctx == null or status == &"":
+		return
+	var always: bool = chance >= 1.0
+	if not always:
+		if ctx.rng == null:
+			return
+	for target_id: int in ctx.target_ids:
+		if not always and not ctx.rng.chance(chance):
+			continue
+		ctx.emit_event(EVT_STATUS_APPLIED, {
+			"actor_id": target_id,
+			"source_id": ctx.caster_id,
+			"status": status,
+			"duration": duration,
+			"stacks": stacks,
+		})

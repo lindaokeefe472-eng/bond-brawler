@@ -16,27 +16,27 @@ const DEAD: int = 9
 
 ## 状态 -> 事件名。表现层按名字映射动画，领域层内部仍用 int 比较。
 const NAMES: Dictionary = {
-    IDLE: &"idle",
-    RUN: &"run",
-    JUMP: &"jump",
-    FALL: &"fall",
-    LAND: &"land",
-    DASH: &"dash",
-    ATTACK: &"attack",
-    SKILL: &"skill",
-    HURT: &"hurt",
-    DEAD: &"dead",
+	IDLE: &"idle",
+	RUN: &"run",
+	JUMP: &"jump",
+	FALL: &"fall",
+	LAND: &"land",
+	DASH: &"dash",
+	ATTACK: &"attack",
+	SKILL: &"skill",
+	HURT: &"hurt",
+	DEAD: &"dead",
 }
 
 static func name_of(state: int) -> StringName:
-    var value: StringName = NAMES.get(state, &"unknown")
-    return value
+	var value: StringName = NAMES.get(state, &"unknown")
+	return value
 
 static func from_name(name: StringName) -> int:
-    for state: int in NAMES.keys():
-        if NAMES[state] == name:
-            return state
-    return -1
+	for state: int in NAMES.keys():
+		if NAMES[state] == name:
+			return state
+	return -1
 
 static func is_valid(state: int) -> bool:
-    return NAMES.has(state)
+	return NAMES.has(state)

@@ -7,18 +7,18 @@ var strength: float = 0.0
 var is_aerial: bool = false
 
 func _init(p_strength: float = 0.0, p_is_aerial: bool = false) -> void:
-    strength = p_strength
-    is_aerial = p_is_aerial
+	strength = p_strength
+	is_aerial = p_is_aerial
 
 func apply(ctx: SkillEffectContext) -> void:
-    if ctx == null:
-        return
-    var direction: Vector2 = Vector2(float(ctx.facing), 0.0)
-    for target_id: int in ctx.target_ids:
-        ctx.emit_event(EVT_KNOCKBACK, {
-            "attacker_id": ctx.caster_id,
-            "target_id": target_id,
-            "strength": strength,
-            "direction": direction,
-            "is_aerial": is_aerial,
-        })
+	if ctx == null:
+		return
+	var direction: Vector2 = Vector2(float(ctx.facing), 0.0)
+	for target_id: int in ctx.target_ids:
+		ctx.emit_event(EVT_KNOCKBACK, {
+			"attacker_id": ctx.caster_id,
+			"target_id": target_id,
+			"strength": strength,
+			"direction": direction,
+			"is_aerial": is_aerial,
+		})

@@ -15,4 +15,4 @@ const EVT_KNOCKBACK: StringName = &"skill.knockback_applied"
 const EVT_PROJECTILE_SPAWNED: StringName = &"skill.projectile_spawned"
 
 func apply(_ctx: SkillEffectContext) -> void:
-    pass
+	pass

@@ -4,14 +4,14 @@ class_name IDataSource
 extends RefCounted
 
 func exists(_path: String) -> bool:
-    push_error("IDataSource.exists() 未实现")
-    return false
+	push_error("IDataSource.exists() 未实现")
+	return false
 
 func read_text(_path: String) -> String:
-    push_error("IDataSource.read_text() 未实现")
-    return ""
+	push_error("IDataSource.read_text() 未实现")
+	return ""
 
 ## 返回解析后的 Variant（Dictionary / Array）。
 func read_json(_path: String) -> Variant:
-    push_error("IDataSource.read_json() 未实现")
-    return null
+	push_error("IDataSource.read_json() 未实现")
+	return null
