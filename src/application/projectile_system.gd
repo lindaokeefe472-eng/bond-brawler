@@ -49,6 +49,8 @@ func spawn_from_payload(owner_id: int, faction: StringName, payload: Dictionary)
 		"lifetime": float(payload.get("lifetime", 0.0)),
 		"range": float(payload.get("range", 0.0)),
 		"radius": float(payload.get("radius", Projectile.DEFAULT_RADIUS)),
+		"height": float(payload.get("height", 1.0)),
+		"sprite": payload.get("sprite", ""),
 	}
 	var spawned: int = 0
 	for i: int in range(count):

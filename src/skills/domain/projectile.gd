@@ -24,6 +24,8 @@ var pierce_remaining: int = 0
 var power: float = 0.0
 var damage_type: StringName = &"neutral"
 var knockback: float = 0.0
+## 表现层用的贴图 slug（manifest 的 projectiles 段）。空 = 用占位色块。
+var sprite: StringName = &""
 var alive: bool = true
 
 ## 已经命中过的目标，保证同一发弹体不会对同一个人重复结算。
@@ -45,6 +47,7 @@ static func create(p_owner_id: int, p_faction: StringName, origin: Vector2, faci
 	out.power = float(config.get("power", 0.0))
 	out.damage_type = StringName(str(config.get("damage_type", "neutral")))
 	out.knockback = maxf(float(config.get("knockback", 0.0)), 0.0)
+	out.sprite = StringName(str(config.get("sprite", "")))
 	out.radius = maxf(float(config.get("radius", DEFAULT_RADIUS)), 0.01)
 	out.height = float(config.get("height", 1.0))
 	if bool(config.get("piercing", false)):

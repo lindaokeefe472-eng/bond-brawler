@@ -54,6 +54,33 @@ func test_every_character_has_a_measured_melee_reach() -> void:
 		assert_float(reach).override_failure_message(
 				"%s 没有算出 melee_reach，判定盒会用默认值" % slug).is_greater(0.0)
 
+## 弹体图也要登记：素材包里明明有 Arrow(Projectile) / Magic(Projectile)，
+## 之前完全没用，表现层只能画白方块。
+func test_projectile_atlases_match_their_frame_table() -> void:
+	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST_PATH))
+	assert_bool(raw is Dictionary).is_true()
+	var projectiles: Variant = (raw as Dictionary).get("projectiles", {})
+	assert_bool(projectiles is Dictionary).override_failure_message(
+			"manifest 里没有 projectiles 段").is_true()
+	assert_int((projectiles as Dictionary).size()).override_failure_message(
+			"弹体图一张都没登记").is_greater(0)
+	for slug: String in (projectiles as Dictionary).keys():
+		var data: Dictionary = (projectiles as Dictionary)[slug]
+		var path: String = "res://assets/sprites/projectiles".path_join(str(data.get("file", "")))
+		assert_bool(FileAccess.file_exists(path)).override_failure_message(
+				"%s 的弹体贴图不存在：%s" % [slug, path]).is_true()
+		var img: Image = Image.load_from_file(path)
+		assert_object(img).is_not_null()
+		var frames: int = int(data.get("frames", 0))
+		var size: Array = data.get("frame_size", [0, 0])
+		assert_int(frames).override_failure_message("%s 帧数不合法" % slug).is_greater(0)
+		assert_int(img.get_width()).override_failure_message(
+				"%s 宽度 %d 不等于 %d 帧 × %d px" % [slug, img.get_width(), frames, int(size[0])]
+			).is_equal(frames * int(size[0]))
+		assert_int(img.get_height()).is_equal(int(size[1]))
+		assert_float(float(data.get("pixel_size", 0.0))).override_failure_message(
+				"%s 没有 pixel_size，渲染时会变成一个小点" % slug).is_greater(0.0)
+
 func _characters() -> Dictionary:
 	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST_PATH))
 	if not (raw is Dictionary):

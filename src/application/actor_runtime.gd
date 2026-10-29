@@ -390,6 +390,8 @@ func projectile_config() -> Dictionary:
 		"damage_type": StringName(str(cfg.get("damage_type", "neutral"))),
 		"radius": maxf(float(cfg.get("radius", Projectile.DEFAULT_RADIUS)), 0.01),
 		"piercing": bool(cfg.get("piercing", false)),
+		# 贴图 slug：manifest 的 projectiles 段里有就用，没有就退回占位色块。
+		"sprite": StringName(str(cfg.get("sprite", ""))),
 	}
 
 ## HUD 用：能量上限。

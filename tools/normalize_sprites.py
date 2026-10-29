@@ -13,6 +13,10 @@
   3. 锚点统一：所有动作都把「idle 的脚底中心」对齐到节点原点，
      每个动作因此在 manifest 里带自己的 offset。
 
+弹体图（manifest 的 projectiles 段）走同一套裁剪，但锚点取内容中心、
+缩放按「最长边 = PROJECTILE_LONGEST_M」定 —— 箭和法术火球大小差得远，
+按角色那套「高度归一化」会得到一堆奇怪的比例。
+
 用法: python -I tools/normalize_sprites.py
 """
 import io
@@ -24,9 +28,12 @@ from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHARS = os.path.join(ROOT, "assets", "sprites", "characters")
+PROJECTILES = os.path.join(ROOT, "assets", "sprites", "projectiles")
 MANIFEST = os.path.join(CHARS, "manifest.json")
 TARGET_HEIGHT_M = 1.8
 SOURCE_FRAME = 100
+## 弹体最长边换算成多少米。箭 ~0.9 m 长、火球 ~0.9 m 直径，在这个画风下刚好。
+PROJECTILE_LONGEST_M = 0.9
 
 
 def union_bbox(frames):
@@ -144,6 +151,36 @@ def melee_window(frames, anchor_x, pixel_size, ratio=0.9):
     return round(first / SPRITE_FPS, 3), round((last - first + 1) / SPRITE_FPS, 3)
 
 
+def normalize_projectiles(manifest):
+    """弹体图：裁到内容包围盒，锚点取内容中心，按最长边定缩放。
+
+    和角色不同，弹体没有「脚底」，也没有统一的参考高度：箭是 19x7、火球是 22x22、
+    施法特效是 61x73。按高度归一化会让火球比箭还小，所以统一按最长边换算。
+    """
+    for slug, data in sorted(manifest.get("projectiles", {}).items()):
+        path = os.path.join(PROJECTILES, data["file"])
+        if not os.path.isfile(path):
+            continue
+        frames = load_frames(path, data["frames"])
+        box = union_bbox(frames)
+        if box is None:
+            continue
+        x0, y0, x1, y1 = box
+        w, h = max(x1 - x0, 1), max(y1 - y0, 1)
+        longest = max(w, h)
+        sheet = Image.new("RGBA", (w * data["frames"], h), (0, 0, 0, 0))
+        for i, fr in enumerate(frames):
+            sheet.paste(fr.crop((x0, y0, x1, y1)), (i * w, 0))
+        sheet.save(path)
+        data["frame_size"] = [w, h]
+        # 内容已经贴边，四边形中心就是内容中心，不需要额外补偿。
+        data["offset"] = [0.0, 0.0]
+        data["pixel_size"] = round(PROJECTILE_LONGEST_M / float(longest), 6)
+        print("%-18s %2dx%-2d x%d  pixel_size=%.4f  -> %.2f m" % (
+            slug, w, h, data["frames"], data["pixel_size"],
+            longest * data["pixel_size"]))
+
+
 def main():
     with io.open(MANIFEST, encoding="utf-8") as f:
         manifest = json.load(f)
@@ -202,6 +239,7 @@ def main():
         print("%-18s ref_h=%2d pixel_size=%.4f  quad≈%.2fm" % (
             slug, ref_h, pixel_size, SOURCE_FRAME * pixel_size))
 
+    normalize_projectiles(manifest)
     manifest["target_height_m"] = TARGET_HEIGHT_M
     manifest["normalized"] = True
     with io.open(MANIFEST, "w", encoding="utf-8") as f:

@@ -119,16 +119,38 @@ crisp pixel art, 1px outline, limited palette, no shadow (shadow is a separate s
 - 生成后必须：切帧 → 统一到 100x100 → 命名 → 更新 manifest。
 - 同一角色的所有动作必须**同一调色板、同一比例、同一脚底基线**。
 
-## 8. 特效（`assets/sprites/fx/`）
+## 8. 弹体图（`assets/sprites/projectiles/`）
+
+来自素材包的 `Arrow(Projectile)` / `Magic(Projectile)`，由 `build_asset_manifest.py`
+拷到项目里、`normalize_sprites.py` 裁到内容包围盒。锚点取内容中心，缩放按
+**最长边 = 0.9 m** 换算（箭和火球大小差得远，按高度归一化会失真）。
+
+角色用哪个弹体贴图由 `data/melee.json` 的 `projectile.sprite` 指定，
+没有指定或素材缺失时，表现层退回按属性上色的方块。
 
 | 类型 | 尺寸 | 帧数 | 命名 |
 |---|---|---|---|
-| 命中火花 | 64x64 | 4~6 | `fx_hit_<元素>.png` |
-| 斩击轨迹 | 128x128 | 3~5 | `fx_slash_<元素>.png` |
-| 投射物 | 32x32 | 2~4 | `fx_proj_<id>.png` |
-| 爆炸 | 128x128 | 6~8 | `fx_boom_<元素>.png` |
+| 箭 | 内容最长边 0.9 m | 1 | `arrow01` / `arrow02` / `arrow03` |
+| 法术 | 内容最长边 0.9 m | 4~10 | `wizard_attack01` / `wizard_attack02` / `priest_attack` |
 """
-    body = "\n".join(rows) + "\n" + tail
+    body = "\n".join(rows) + "\n"
+    projectiles = m.get("projectiles", {})
+    if projectiles:
+        proj_rows = []
+        for slug in sorted(projectiles):
+            p = projectiles[slug]
+            fs = p.get("frame_size", ["?", "?"])
+            ps = float(p.get("pixel_size", 0.0))
+            try:
+                longest = max(int(fs[0]), int(fs[1]))
+            except (TypeError, ValueError):
+                longest = 0
+            proj_rows.append("| `%s` | %sx%s | %d | %.4f | %.2f m |" % (
+                slug, fs[0], fs[1], int(p.get("frames", 0)), ps, longest * ps))
+        body += ("\n### 3.1 弹体图（自动生成）\n\n"
+                 "| slug | 帧尺寸 | 帧数 | pixel_size | 最长边 |\n"
+                 "|---|---|---|---|---|\n" + "\n".join(proj_rows) + "\n")
+    body += tail
     with io.open(OUT, "w", encoding="utf-8") as f:
         f.write(HEADER + body)
     print("generated", OUT, len(rows), "characters")

@@ -51,6 +51,18 @@ assets/sprites/characters/<slug>/<slug>_shadow.png
 | Werewolf `werewolf` | 27x17 | 0.1059 | 27x17/6帧 | 28x18/8帧 | 35x26/9帧 | 53x37/13帧 | - | - | 26x17/4帧 | 37x19/4帧 | 2.59 m | 0.42~0.58 s |
 | Wizard `wizard` | 17x20 | 0.0900 | 17x20/6帧 | 17x21/8帧 | 21x22/6帧 | 34x26/6帧 | - | - | 17x18/4帧 | 33x19/4帧 | 1.17 m | 0.25~0.42 s |
 
+### 3.1 弹体图（自动生成）
+
+| slug | 帧尺寸 | 帧数 | pixel_size | 最长边 |
+|---|---|---|---|---|
+| `arrow01` | 19x7 | 1 | 0.0474 | 0.90 m |
+| `arrow02` | 19x7 | 1 | 0.0474 | 0.90 m |
+| `arrow03` | 20x7 | 1 | 0.0450 | 0.90 m |
+| `priest_attack` | 30x37 | 5 | 0.0243 | 0.90 m |
+| `priest_heal` | 30x38 | 4 | 0.0237 | 0.90 m |
+| `wizard_attack01` | 61x73 | 10 | 0.0123 | 0.90 m |
+| `wizard_attack02` | 27x22 | 7 | 0.0333 | 0.90 m |
+
 ## 4. 多层视差背景
 
 | 层 | 用途 | 视差系数 | 画布尺寸 | 平铺 |
@@ -95,11 +107,16 @@ crisp pixel art, 1px outline, limited palette, no shadow (shadow is a separate s
 - 生成后必须：切帧 → 统一到 100x100 → 命名 → 更新 manifest。
 - 同一角色的所有动作必须**同一调色板、同一比例、同一脚底基线**。
 
-## 8. 特效（`assets/sprites/fx/`）
+## 8. 弹体图（`assets/sprites/projectiles/`）
+
+来自素材包的 `Arrow(Projectile)` / `Magic(Projectile)`，由 `build_asset_manifest.py`
+拷到项目里、`normalize_sprites.py` 裁到内容包围盒。锚点取内容中心，缩放按
+**最长边 = 0.9 m** 换算（箭和火球大小差得远，按高度归一化会失真）。
+
+角色用哪个弹体贴图由 `data/melee.json` 的 `projectile.sprite` 指定，
+没有指定或素材缺失时，表现层退回按属性上色的方块。
 
 | 类型 | 尺寸 | 帧数 | 命名 |
 |---|---|---|---|
-| 命中火花 | 64x64 | 4~6 | `fx_hit_<元素>.png` |
-| 斩击轨迹 | 128x128 | 3~5 | `fx_slash_<元素>.png` |
-| 投射物 | 32x32 | 2~4 | `fx_proj_<id>.png` |
-| 爆炸 | 128x128 | 6~8 | `fx_boom_<元素>.png` |
+| 箭 | 内容最长边 0.9 m | 1 | `arrow01` / `arrow02` / `arrow03` |
+| 法术 | 内容最长边 0.9 m | 4~10 | `wizard_attack01` / `wizard_attack02` / `priest_attack` |

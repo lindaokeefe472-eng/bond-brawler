@@ -277,6 +277,7 @@ func _fire_basic_projectile(actor: ActorRuntime) -> void:
 		"range": float(cfg.get("range", 0.0)),
 		"radius": float(cfg.get("radius", Projectile.DEFAULT_RADIUS)),
 		"piercing": bool(cfg.get("piercing", false)),
+		"sprite": cfg.get("sprite", &""),
 	})
 
 ## 弹体生成：效果器只发事件，落到这里才真的建实体。

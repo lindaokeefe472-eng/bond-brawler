@@ -37,6 +37,7 @@ python -I tools/lint_gdscript.py
 & "D:\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --path . --script res://tools/capture.gd
 
 # 素材：从原始包重建图集清单 / 归一化 / 重新生成 ASSET_SPEC
+# 角色图和弹体图一起出（弹体在 pack 根目录的 Arrow/Magic(Projectile) 里）
 python tools/build_asset_manifest.py "<Tiny RPG pack>/Characters(100x100)" assets/sprites/characters
 python tools/normalize_sprites.py
 python -I tools/gen_asset_spec.py
@@ -175,7 +176,9 @@ python -I tools/gen_asset_spec.py
 - 弹体和技能弹体走同一条流水线，所以命中结算、顿帧、跳字、音效全都自动复用。
 - 训练场面板对这类角色显示的是**弹体射程**，判定谓词也换成
   「正前方 + 射程内 + 横向偏移 < 命中半径 + 身位半径」。
-- 弹体表现层还是白色方块占位（`ProjectileLayer`），换正式特效时只改 `_make_mesh`。
+- 弹体贴图来自素材包（`assets/sprites/projectiles/`，manifest 的 `projectiles` 段），
+  由 `projectile.sprite` 指定 slug。没指定或素材缺失时退回按属性上色的方块。
+  多帧特效（法术）按 12 fps 循环，单帧的箭不动；朝向由速度方向决定。
 
 **`data/` 不随仓库分发**，新克隆的仓库里所有角色都会退回近战 —— 这是预期行为，
 远程配置在本地 `data/melee.json`（`test_melee_data.gd` 校验字段）。
@@ -211,7 +214,7 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-420 个测试（GdUnit4，65 个 suite）全绿，架构检查通过。
+426 个测试（GdUnit4，66 个 suite）全绿，架构检查通过。
 刷怪表和 AI 性格来自 data/stages.json（StageRepository），缺数据时退回内置兜底表。
 训练场是独立场景（TrainingRoot 继承 GameRoot，只重写刷怪），用来量命中范围与伤害。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。

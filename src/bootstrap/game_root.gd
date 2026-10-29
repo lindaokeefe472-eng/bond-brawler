@@ -95,10 +95,10 @@ func _ready() -> void:
 	_build_save()
 	_build_audio()
 	_build_arena()
-	_build_projectiles()
 	_build_feedback()
 	_bind_events()
 	_load_assets()
+	_build_projectiles()
 	_build_tuner()
 	_collect_slots()
 	_spawn_actors()
@@ -231,10 +231,12 @@ func _build_hud() -> void:
 	add_child(_hud)
 
 ## 弹体表现层。领域层的弹体列表是唯一真相，这里只做投影。
+## 贴图在 manifest 的 projectiles 段里，所以必须在 _load_assets() 之后建。
 func _build_projectiles() -> void:
 	_projectiles = ProjectileLayer.new()
 	_projectiles.name = "Projectiles"
 	add_child(_projectiles)
+	_projectiles.configure(_manifest)
 
 func _build_feedback() -> void:
 	var number_root := Node3D.new()

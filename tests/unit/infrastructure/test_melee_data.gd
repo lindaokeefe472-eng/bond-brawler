@@ -57,6 +57,25 @@ func test_ranged_characters_are_marked_as_projectile() -> void:
 		assert_str(str(entry.get("attack", "melee"))).override_failure_message(
 				"%s 应该是远程角色" % character_id).is_equal("projectile")
 
+## sprite 必须是 manifest 里登记过的弹体贴图，否则表现层只会画白方块。
+func test_projectile_sprite_slugs_exist() -> void:
+	if not FileAccess.file_exists(MANIFEST_PATH):
+		return
+	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST_PATH))
+	if not (raw is Dictionary):
+		return
+	var known: Variant = (raw as Dictionary).get("projectiles", {})
+	var characters: Dictionary = _characters()
+	for character_id: String in characters.keys():
+		var projectile: Variant = (characters[character_id] as Dictionary).get("projectile", {})
+		if not (projectile is Dictionary):
+			continue
+		var slug: String = str((projectile as Dictionary).get("sprite", ""))
+		if slug.is_empty():
+			continue
+		assert_bool(known is Dictionary and (known as Dictionary).has(slug)).override_failure_message(
+				"%s 的弹体贴图 %s 在 manifest 里不存在" % [character_id, slug]).is_true()
+
 func _characters() -> Dictionary:
 	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(MELEE_PATH))
 	if not (raw is Dictionary):
