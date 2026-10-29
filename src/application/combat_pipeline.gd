@@ -101,21 +101,25 @@ func skill_targets(caster_id: int, origin: Vector2, facing: int, hitbox: Diction
 	return out
 
 # ------------------------------------------------------------------ 普攻
-## 普攻窄相：PlaneMath.in_cone 自带纵深对齐，因此不需要物理碰撞体参与。
-## config 来自 ActorRuntime.melee_config()，数值不在这里硬编码。
+## 普攻窄相。形态由 config["kind"] 决定：
+##   melee -> PlaneMath.in_cone（身前扇形，身后打不到）
+##   aoe   -> 以攻击者为圆心、config["radius"] 为半径的圆（绕身一圈，身后也打得到）
+## config 来自 ActorRuntime.attack_config()，数值不在这里硬编码。
 ## candidate_ids 是宽相（Area3D）给出的「可能命中」提示。
 ##   null / 空数组 -> 不做过滤，全量扫描（headless 测试与物理未就绪时的退化路径）。
-##   非空 -> 只结算其中的目标。判定盒由近战参数推导且各方向加了 HITBOX_MARGIN，
+##   非空 -> 只结算其中的目标。判定盒由同一份参数推导且各方向加了 HITBOX_MARGIN，
 ##   所以它是窄相的严格超集，过滤只会省掉无用的遍历，不会漏掉本该命中的目标。
-func resolve_melee(attacker: ActorRuntime, actors: Dictionary,
+func resolve_basic_attack(attacker: ActorRuntime, actors: Dictionary,
 		config: Dictionary, candidate_ids: Variant = null,
 		already_hit: Variant = null) -> Array[CombatDamageResult]:
 	var results: Array[CombatDamageResult] = []
 	if attacker == null or not attacker.is_alive():
 		return results
 
+	var kind: StringName = StringName(str(config.get("kind", "melee")))
 	var reach: float = maxf(float(config.get("range", 0.0)), 0.0)
 	var half_arc: float = maxf(float(config.get("half_arc", 0.0)), 0.0)
+	var radius: float = maxf(float(config.get("radius", 0.0)), 0.0)
 	var power_ratio: float = float(config.get("power_ratio", 0.0))
 	var knockback: float = maxf(float(config.get("knockback", 0.0)), 0.0)
 	var damage_type: StringName = StringName(str(config.get("damage_type", "neutral")))
@@ -131,7 +135,11 @@ func resolve_melee(attacker: ActorRuntime, actors: Dictionary,
 			continue
 		if candidate_ids is Array and not (candidate_ids as Array).is_empty()                 and not (candidate_ids as Array).has(target.id):
 			continue
-		if not PlaneMath.in_cone(attacker.plane_pos, attacker.facing, target.plane_pos, reach, half_arc):
+		if kind == &"aoe":
+			if PlaneMath.distance(attacker.plane_pos, target.plane_pos) > radius:
+				continue
+		elif not PlaneMath.in_cone(attacker.plane_pos, attacker.facing, target.plane_pos,
+				reach, half_arc):
 			continue
 		# 判定窗口每帧都在跑，同一个目标本次挥击只能吃一次伤害。
 		if already_hit is Dictionary and (already_hit as Dictionary).has(target.id):

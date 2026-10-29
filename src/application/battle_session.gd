@@ -250,12 +250,13 @@ func _resolve_hits() -> void:
 		# 边沿：开新一次挥击，清空已命中集合。
 		if actor.consume_attack_activation():
 			actor.begin_attack_swing()
-			# 远程角色在起手那一帧放一发弹体，整段 ACTIVE 不再做扇形判定。
+			# 远程段在起手那一帧放一发弹体，整段 ACTIVE 不再做命中判定。
 			if actor.is_ranged_attack():
 				_fire_basic_projectile(actor)
 		# 整个 ACTIVE 窗口每帧都判：盒子亮着的时候就是真能打到的时候。
+		# 近战扇形和绕身范围都走这一条，形态由 attack_config 的 kind 决定。
 		if actor.is_attack_active() and not actor.is_ranged_attack():
-			_pipeline.resolve_melee(actor, _actors, actor.melee_config(),
+			_pipeline.resolve_basic_attack(actor, _actors, actor.attack_config(),
 					_broadphase.get(actor.id, null), actor.attack_hit_ids())
 
 ## 普攻弹体：和技能弹体走同一条流水线，命中结算、顿帧、跳字、音效全部复用。

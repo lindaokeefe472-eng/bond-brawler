@@ -55,6 +55,7 @@ def main():
         m = json.load(f)
 
     rows = []
+    step_rows = []
     for slug in sorted(m["characters"]):
         e = m["characters"][slug]
         a = e["animations"]
@@ -73,6 +74,14 @@ def main():
         rows.append("| %s `%s` | %sx%s | %.4f | %s | %.2f m | %s |" % (
             e["display_name"], slug, idle_fs[0], idle_fs[1],
             float(e.get("pixel_size", 0.0)), " | ".join(cells), reach, window))
+        # 逐段普攻：三段连击各有各的前伸和判定窗口，缺字段的段退回角色级值。
+        for step in sorted(e.get("attacks", {}), key=lambda s: int(s)):
+            d = e["attacks"][step]
+            w = float(d.get("windup", windup))
+            ac = float(d.get("active", active))
+            win = "%.2f~%.2f s" % (w, w + ac) if ac > 0.0 else "-"
+            step_rows.append("| `%s` | %s | %.2f m | %s |" % (
+                slug, step, float(d.get("reach", reach)), win))
 
     tail = """
 ## 4. 多层视差背景
@@ -134,6 +143,11 @@ crisp pixel art, 1px outline, limited palette, no shadow (shadow is a separate s
 | 法术 | 内容最长边 0.9 m | 4~10 | `wizard_attack01` / `wizard_attack02` / `priest_attack` |
 """
     body = "\n".join(rows) + "\n"
+    if step_rows:
+        body += ("\n### 3.0 逐段普攻（自动生成）\n\n"
+                 "`ActorRuntime.attack_config(step)` 按段取用；没写 reach 的段退回上表角色级值。\n\n"
+                 "| 角色 | 段 | 前伸 | 判定窗口 |\n"
+                 "|---|---|---|---|\n" + "\n".join(step_rows) + "\n")
     projectiles = m.get("projectiles", {})
     if projectiles:
         proj_rows = []

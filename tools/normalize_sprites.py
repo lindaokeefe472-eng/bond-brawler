@@ -207,14 +207,31 @@ def main():
         anchor_y = ref[3]                      # 脚底
         # 必须在裁剪循环之前算 —— 裁剪会把图集覆盖成紧贴内容的版本，
         # 之后再 load_frames 就按 100px 切不开了。
-        if "attack1" in anims:
-            attack_frames = load_frames(
-                os.path.join(char_dir, anims["attack1"]["file"]), anims["attack1"]["frames"])
-            entry["melee_reach"] = melee_reach(attack_frames, anchor_x, pixel_size)
-            windup, active = melee_window(attack_frames, anchor_x, pixel_size)
+        # 逐段量普攻：attack1/2/3 的动作长度、武器前伸都不一样，
+        # 共用一份时序会让第二、三段在武器还没挥出去时就结算。
+        steps = {}
+        for step in (1, 2, 3):
+            key = "attack%d" % step
+            if key not in anims:
+                continue
+            step_frames = load_frames(
+                os.path.join(char_dir, anims[key]["file"]), anims[key]["frames"])
+            step_data = {"reach": melee_reach(step_frames, anchor_x, pixel_size)}
+            windup, active = melee_window(step_frames, anchor_x, pixel_size)
             if windup > 0.0 and active > 0.0:
-                entry["melee_windup"] = windup
-                entry["melee_active"] = active
+                step_data["windup"] = windup
+                step_data["active"] = active
+            steps[str(step)] = step_data
+        if steps:
+            entry["attacks"] = steps
+            # 顶层字段保留第 1 段的值：老代码和老测试还在读它。
+            first = steps.get("1", {})
+            if "reach" in first:
+                entry["melee_reach"] = first["reach"]
+            if "windup" in first:
+                entry["melee_windup"] = first["windup"]
+            if "active" in first:
+                entry["melee_active"] = first["active"]
 
         for name, data in anims.items():
             box = boxes[name]

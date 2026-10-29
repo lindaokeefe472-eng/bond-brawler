@@ -21,6 +21,8 @@ const FLASH_SECONDS: float = 0.09
 const HITBOX_SHAPE_NODE: String = "CollisionShape3D"
 ## 跳字从头顶多高处冒出。
 const DAMAGE_NUMBER_HEIGHT: float = 1.9
+## 远程段的判定盒只标「出手点」，用这么长的一小段。
+const RANGED_ORIGIN_REACH: float = 0.6
 
 ## 动作状态编号：必须与 locomotion 的 ActionState 顺序一致（见 ARCHITECTURE 4.6）。
 ## 表现层只按编号分派动画，不引用 locomotion 的类型，避免跨上下文依赖。
@@ -74,6 +76,8 @@ var _hitbox_height: float = 0.8
 var _state: int = ActionState.IDLE
 ## 微调模式下强制显示判定盒，不用等出手那几帧。
 var _hitbox_preview: bool = false
+## 上一次按哪一段摆的盒子。连段换段时几何要重算。
+var _hitbox_step: int = -1
 
 func _ready() -> void:
 	_sprite = get_node_or_null(SPRITE_NODE) as SpriteBillboard
@@ -116,26 +120,53 @@ func bind(p_runtime: ActorRuntime, p_character_id: String, manifest: Dictionary)
 		_hurtbox.configure(actor_id, faction)
 	if _hitbox != null:
 		_hitbox.configure(actor_id, faction)
+	_hitbox_step = -1
 	_apply_hitbox_geometry()
 	sync_from_runtime()
 
-## 判定盒的尺寸与位置全部由 ActorRuntime 的近战参数推导，和窄相同源。
+## 判定盒的尺寸与位置全部由「当前这一段」的普攻参数推导，和窄相同源。
 ##
 ## 之前形状写死在 actor_view.tscn 里（2.4 x 1.6 x 1.8），领域层却用
 ## range=2.4 / lane=0.85 另一套数，两边必然对不上：实测出现过 2.67 m 的
 ## 「隔空命中」。现在盒子由 reach / lane_tolerance / hit_height 算出来，
 ## 再各方向加一圈 HITBOX_MARGIN，保证宽相是窄相的严格超集。
+##
+## 三段连击各有各的前伸和形态（近战扇形 / 绕身范围 / 远程出手点），
+## 盒子必须跟着当前段走，否则调试视图会显示上一段的形状。
 func _apply_hitbox_geometry() -> void:
 	if _hitbox == null or runtime == null:
 		return
-	var cfg: Dictionary = runtime.melee_config()
-	_set_hitbox_geometry(
-			maxf(float(cfg.get("range", GameConstants.MELEE_REACH)), 0.0),
-			maxf(float(cfg.get("lane_tolerance", GameConstants.MELEE_LANE_TOLERANCE)), 0.0),
-			maxf(float(cfg.get("hit_height", GameConstants.MELEE_HIT_HEIGHT)), 0.1),
-			maxf(float(cfg.get("margin", GameConstants.HITBOX_MARGIN)), 0.0))
+	var cfg: Dictionary = runtime.attack_config()
+	var kind: StringName = StringName(str(cfg.get("kind", "melee")))
+	var lane: float = maxf(float(cfg.get("lane_tolerance", GameConstants.MELEE_LANE_TOLERANCE)), 0.0)
+	var height: float = maxf(float(cfg.get("hit_height", GameConstants.MELEE_HIT_HEIGHT)), 0.1)
+	var margin: float = maxf(float(cfg.get("margin", GameConstants.HITBOX_MARGIN)), 0.0)
+	if kind == &"aoe":
+		_set_hitbox_aoe(maxf(float(cfg.get("radius", 0.0)), 0.1), height, margin)
+		return
+	if kind == &"ranged":
+		# 远程段的盒子只标「出手点」，真正打到哪由弹体决定。
+		_set_hitbox_geometry(RANGED_ORIGIN_REACH, lane, height, margin)
+		return
+	_set_hitbox_geometry(maxf(float(cfg.get("range", GameConstants.MELEE_REACH)), 0.0),
+			lane, height, margin)
 
-## 按四个参数摆盒子。运行时用 melee_config()，编辑器预览用 GameConstants 默认值。
+## 绕身范围：以角色为圆心的正方形，身后也覆盖。
+func _set_hitbox_aoe(radius: float, height: float, margin: float) -> void:
+	if _hitbox == null:
+		return
+	var shape_node: CollisionShape3D = _hitbox.get_node_or_null(HITBOX_SHAPE_NODE) as CollisionShape3D
+	if shape_node == null:
+		return
+	var box := BoxShape3D.new()
+	var box_height: float = height + margin
+	box.size = Vector3(radius * 2.0 + margin * 2.0, box_height, radius * 2.0 + margin * 2.0)
+	shape_node.shape = box
+	shape_node.position = Vector3.ZERO
+	_hitbox_center_x = 0.0
+	_hitbox_height = box_height * 0.5
+
+## 按四个参数摆盒子。运行时用 attack_config()，编辑器预览用 GameConstants 默认值。
 func _set_hitbox_geometry(reach: float, lane: float, height: float, margin: float) -> void:
 	if _hitbox == null:
 		return
@@ -159,10 +190,20 @@ func _set_hitbox_geometry(reach: float, lane: float, height: float, margin: floa
 func sync_from_runtime() -> void:
 	if runtime == null:
 		return
+	_refresh_hitbox_for_step()
 	var state: int = ActionState.IDLE
 	if runtime.action != null:
 		state = runtime.action.current_state()
 	_apply_pose(runtime.plane_pos, runtime.height, runtime.facing, state)
+
+## 连段换段时盒子要跟着换：三段的前伸和形态都可能不同。
+## 只在段数变化时重算，避免每帧重建 BoxShape3D。
+func _refresh_hitbox_for_step() -> void:
+	var step: int = runtime.current_attack_step()
+	if step == _hitbox_step:
+		return
+	_hitbox_step = step
+	_apply_hitbox_geometry()
 
 ## 权威映射：平面坐标 -> 世界坐标，状态 -> 动画，朝向 -> 翻转与攻击盒位置。
 ## output 只按字段读取（plane_pos / height / facing / state），不声明具体类型：
@@ -345,7 +386,7 @@ func _update_hitbox(state: int) -> void:
 		# 只在判定帧打开。起手帧就打开的话，剑还收着、判定盒已经伸到 1.45 m，
 		# 看起来就是「多了一把刀的距离」。后摇同理立刻关掉。
 		# 代价：ACTIVE 首帧的重叠列表可能还没填好，宽相候选为空 ——
-		# resolve_melee 遇到空候选会退化为全量扫描，所以不会漏伤害。
+		# resolve_basic_attack 遇到空候选会退化为全量扫描，所以不会漏伤害。
 		active = state == ActionState.ATTACK and phase == ATTACK_PHASE_ACTIVE
 	_hitbox.set_active(active)
 
@@ -382,8 +423,9 @@ func _build_editor_preview() -> void:
 		_hitbox.position = Vector3(_hitbox_center_x, _hitbox_height, 0.0)
 
 ## 调试用：melee_config 改完之后让盒子按新参数重算一遍。
-## 正常流程只在 bind() 时算一次，因为参数不会变。
+## 正常流程只在 bind() 和换段时算一次，因为参数不会变。
 func refresh_hitbox() -> void:
+	_hitbox_step = -1
 	_apply_hitbox_geometry()
 	_update_hitbox(_state)
 

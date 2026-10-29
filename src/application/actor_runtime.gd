@@ -25,6 +25,8 @@ const HIT_KIND_LIGHT: StringName = &"light"
 
 const DEFAULT_FACTION: StringName = GameConstants.FACTION_NEUTRAL
 const SKILL_SLOT_COUNT: int = LocoInputFrame.SKILL_SLOTS
+## 普攻最多几段连击（和 LocoActionMachine 的 attack_combo_count 默认值一致）。
+const ATTACK_STEP_MAX: int = 3
 
 # ---------------------------------------------------------------- 契约字段
 var id: int = 0
@@ -375,13 +377,55 @@ func brain_profile() -> Dictionary:
 ##
 ## 为什么必须有这条：这些角色的攻击动作是拉弓/施法，判定却是近战扇形 ——
 ## 动作和伤害完全对不上，看起来就是「隔空掉血，没有任何东西飞出去」。
+## 注意：逐段可以各自不同（见 attack_kind），这里问的是「当前这一段」。
 func is_ranged_attack() -> bool:
-	return StringName(str(_melee.get("attack", "melee"))) == &"projectile"
+	return attack_kind(0) == &"ranged"
 
-## 普攻弹体参数。缺字段时退回 GameConstants，保证数据没配也能打出去。
-func projectile_config() -> Dictionary:
+## 当前正在打的连段段数（1..3）。不在攻击中时按第 1 段算。
+func current_attack_step() -> int:
+	if action == null or action.current_state() != LocoActionState.ATTACK:
+		return 1
+	return clampi(action.combo_index() + 1, 1, ATTACK_STEP_MAX)
+
+## 某一段普攻的判定形态：melee（扇形）/ aoe（绕身一圈）/ ranged（弹体）。
+## 优先级：这一段自己的 kind -> 角色级 attack = "projectile" -> melee。
+func attack_kind(step: int = 0) -> StringName:
+	var idx: int = step if step > 0 else current_attack_step()
+	var per: Dictionary = _attack_step(idx)
+	if per.has("kind"):
+		return StringName(str(per["kind"]))
+	if StringName(str(_melee.get("attack", "melee"))) == &"projectile":
+		return &"ranged"
+	return &"melee"
+
+## 某一段普攻的完整参数：基础 melee_config + 这一段自己的覆盖。
+## step <= 0 表示「当前段」。判定盒和窄相都读它，所以看到的就是打得到的。
+func attack_config(step: int = 0) -> Dictionary:
+	var idx: int = step if step > 0 else current_attack_step()
+	var cfg: Dictionary = melee_config()
+	var per: Dictionary = _attack_step(idx)
+	for key: Variant in per.keys():
+		# 图集和数据表里叫 reach（武器前伸），运行时配置里叫 range —— 这里是唯一换算点。
+		if String(key) == "reach":
+			cfg["range"] = per[key]
+		else:
+			cfg[key] = per[key]
+	cfg["kind"] = attack_kind(idx)
+	return cfg
+
+## 普攻弹体参数。逐段可以覆盖（第二段换个箭种之类），缺字段时退回 GameConstants。
+func projectile_config(step: int = 0) -> Dictionary:
+	var idx: int = step if step > 0 else current_attack_step()
+	var cfg: Dictionary = {}
 	var raw: Variant = _melee.get("projectile", {})
-	var cfg: Dictionary = raw if raw is Dictionary else {}
+	if raw is Dictionary:
+		for key: Variant in (raw as Dictionary).keys():
+			cfg[key] = (raw as Dictionary)[key]
+	var per: Dictionary = _attack_step(idx)
+	var per_projectile: Variant = per.get("projectile", {})
+	if per_projectile is Dictionary:
+		for key: Variant in (per_projectile as Dictionary).keys():
+			cfg[key] = (per_projectile as Dictionary)[key]
 	return {
 		"speed": maxf(float(cfg.get("speed", GameConstants.BASIC_PROJECTILE_SPEED)), 0.0),
 		"range": maxf(float(cfg.get("range", GameConstants.BASIC_PROJECTILE_RANGE)), 0.0),
@@ -393,6 +437,20 @@ func projectile_config() -> Dictionary:
 		# 贴图 slug：manifest 的 projectiles 段里有就用，没有就退回占位色块。
 		"sprite": StringName(str(cfg.get("sprite", ""))),
 	}
+
+func _attack_step(step: int) -> Dictionary:
+	var raw: Variant = _melee.get("attacks", {})
+	if not (raw is Dictionary):
+		return {}
+	var entry: Variant = (raw as Dictionary).get(str(step), {})
+	return entry if entry is Dictionary else {}
+
+## 这个角色有几段普攻（图集里有几段就有几段）。
+func attack_step_count() -> int:
+	var raw: Variant = _melee.get("attacks", {})
+	if not (raw is Dictionary):
+		return 1
+	return clampi((raw as Dictionary).size(), 1, ATTACK_STEP_MAX)
 
 ## HUD 用：能量上限。
 func energy_max() -> float:
@@ -409,12 +467,36 @@ func skill_cooldown_ratios() -> Array[float]:
 		out.append(clampf(inst.cooldown_left / inst.def.cooldown, 0.0, 1.0))
 	return out
 
-## 调试用：就地改普攻参数。判定盒和窄相都读同一份 melee_config()，
+## 调试用：就地改普攻参数。判定盒和窄相都读同一份 attack_config()，
 ## 所以改完两边一起变 —— 微调时「看到的」就是「打得到的」。
+##
+## range 必须同时写进「当前这一段」：三段连击各有各的 reach（图集量出来的），
+## attack_config() 会拿逐段 reach 盖掉基础 range。只改基础值的话盒子原地不动，
+## F4 就白调了。键名 reach 与 range 同义 —— 存档和 data/melee.json 用 reach，
+## 运行时用 range，这里做一次换算。
 func set_melee_param(key: StringName, value: float) -> void:
 	if key == &"":
 		return
-	_melee[String(key)] = value
+	var name: String = "range" if String(key) == "reach" else String(key)
+	_melee[name] = value
+	if name == "range":
+		set_attack_step_reach(current_attack_step(), value)
+
+## 某一段普攻的前伸（米）。没写逐段 reach 时退回基础 range。
+func attack_step_reach(step: int) -> float:
+	var per: Dictionary = _attack_step(step)
+	if per.has("reach"):
+		return float(per["reach"])
+	return float(melee_config()["range"])
+
+## 只改某一段的前伸。逐段 reach 是 attack_config() 的权威来源。
+func set_attack_step_reach(step: int, value: float) -> void:
+	var raw: Variant = _melee.get("attacks", {})
+	if not (raw is Dictionary):
+		return
+	var entry: Variant = (raw as Dictionary).get(str(step), {})
+	if entry is Dictionary:
+		(entry as Dictionary)["reach"] = value
 
 # ------------------------------------------------------------------ 快照
 func snapshot() -> Dictionary:

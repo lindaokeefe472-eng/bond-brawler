@@ -51,6 +51,62 @@ assets/sprites/characters/<slug>/<slug>_shadow.png
 | Werewolf `werewolf` | 27x17 | 0.1059 | 27x17/6帧 | 28x18/8帧 | 35x26/9帧 | 53x37/13帧 | - | - | 26x17/4帧 | 37x19/4帧 | 2.59 m | 0.42~0.58 s |
 | Wizard `wizard` | 17x20 | 0.0900 | 17x20/6帧 | 17x21/8帧 | 21x22/6帧 | 34x26/6帧 | - | - | 17x18/4帧 | 33x19/4帧 | 1.17 m | 0.25~0.42 s |
 
+### 3.0 逐段普攻（自动生成）
+
+`ActorRuntime.attack_config(step)` 按段取用；没写 reach 的段退回上表角色级值。
+
+| 角色 | 段 | 前伸 | 判定窗口 |
+|---|---|---|---|
+| `archer` | 1 | 2.70 m | 0.50~0.58 s |
+| `archer` | 2 | 5.00 m | 0.83~0.92 s |
+| `armored_axeman` | 1 | 2.34 m | 0.33~0.42 s |
+| `armored_axeman` | 2 | 2.43 m | 0.33~0.75 s |
+| `armored_axeman` | 3 | 4.05 m | 0.75~0.92 s |
+| `armored_orc` | 1 | 1.98 m | 0.33~0.50 s |
+| `armored_orc` | 2 | 2.52 m | 0.42~0.67 s |
+| `armored_orc` | 3 | 2.88 m | 0.58~0.67 s |
+| `armored_skeleton` | 1 | 3.49 m | 0.33~0.50 s |
+| `armored_skeleton` | 2 | 2.25 m | 0.17~0.75 s |
+| `elite_orc` | 1 | 1.95 m | 0.25~0.33 s |
+| `elite_orc` | 2 | 1.95 m | 0.08~0.83 s |
+| `elite_orc` | 3 | 2.17 m | 0.33~0.58 s |
+| `greatsword_skeleton` | 1 | 3.46 m | 0.42~0.58 s |
+| `greatsword_skeleton` | 2 | 4.00 m | 0.58~0.83 s |
+| `greatsword_skeleton` | 3 | 3.19 m | 0.33~0.42 s |
+| `knight` | 1 | 2.04 m | 0.25~0.42 s |
+| `knight` | 2 | 2.70 m | 0.25~0.75 s |
+| `knight` | 3 | 4.03 m | 0.58~0.83 s |
+| `knight_templar` | 1 | 2.90 m | 0.33~0.58 s |
+| `knight_templar` | 2 | 2.50 m | 0.42~0.58 s |
+| `knight_templar` | 3 | 2.70 m | 0.58~0.75 s |
+| `lancer` | 1 | 2.85 m | 0.25~0.42 s |
+| `lancer` | 2 | 2.85 m | 0.17~0.25 s |
+| `lancer` | 3 | 2.62 m | 0.25~0.42 s |
+| `orc` | 1 | 2.14 m | 0.25~0.42 s |
+| `orc` | 2 | 2.25 m | 0.25~0.33 s |
+| `orc_rider` | 1 | 1.68 m | 0.33~0.58 s |
+| `orc_rider` | 2 | 2.67 m | 0.42~0.58 s |
+| `orc_rider` | 3 | 2.54 m | 0.42~0.83 s |
+| `priest` | 1 | 1.59 m | 0.33~0.75 s |
+| `skeleton` | 1 | 2.19 m | 0.25~0.42 s |
+| `skeleton` | 2 | 2.98 m | 0.25~0.42 s |
+| `skeleton_archer` | 1 | 2.00 m | 0.50~0.58 s |
+| `slime` | 1 | 3.49 m | 0.25~0.42 s |
+| `slime` | 2 | 5.08 m | 0.67~0.83 s |
+| `soldier` | 1 | 1.90 m | 0.25~0.42 s |
+| `soldier` | 2 | 1.90 m | 0.25~0.50 s |
+| `soldier` | 3 | 2.56 m | 0.58~0.67 s |
+| `swordsman` | 1 | 2.46 m | 0.25~0.42 s |
+| `swordsman` | 2 | 3.68 m | 1.00~1.08 s |
+| `swordsman` | 3 | 3.27 m | 0.58~0.92 s |
+| `werebear` | 1 | 3.00 m | 0.42~0.58 s |
+| `werebear` | 2 | 2.80 m | 0.33~0.92 s |
+| `werebear` | 3 | 3.50 m | 0.50~0.67 s |
+| `werewolf` | 1 | 2.59 m | 0.42~0.58 s |
+| `werewolf` | 2 | 3.65 m | 0.67~1.00 s |
+| `wizard` | 1 | 1.17 m | 0.25~0.42 s |
+| `wizard` | 2 | 1.89 m | 0.33~0.50 s |
+
 ### 3.1 弹体图（自动生成）
 
 | slug | 帧尺寸 | 帧数 | pixel_size | 最长边 |

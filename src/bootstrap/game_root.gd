@@ -331,6 +331,8 @@ func _build_spec(species: Dictionary, faction: StringName, spawn: Vector2,
 	var raw_projectile: Variant = override.get("projectile", {})
 	if raw_projectile is Dictionary:
 		melee["projectile"] = (raw_projectile as Dictionary).duplicate(true)
+	# 逐段参数：三段连击各有各的前伸 / 时序 / 判定形态。
+	melee["attacks"] = _attack_steps(character_id)
 	return {
 		"species_id": str(species.get("id", character_id)),
 		"faction": faction,
@@ -342,19 +344,56 @@ func _build_spec(species: Dictionary, faction: StringName, spawn: Vector2,
 		"action_profile": _character_attack_profile(character_id),
 	}
 
-## 普攻判定窗口也逐角色：图集里武器真正挥出去的那几帧。
-## 用统一的 0.17~0.27 秒，很多角色那一段还停在「武器收着」的帧上，
-## 判定盒就会在武器没伸出来的时候亮着 —— 看起来就是盒子比武器大一圈。
+## 逐段普攻参数：图集量出来的 reach/windup/active，再叠 data/melee.json 的 attacks[step]。
+## 三段连击的动作长度和武器前伸都不一样，共用第 1 段的话，第二、三段会在
+## 武器还没挥出去的时候就开始结算。
+func _attack_steps(character_id: String) -> Dictionary:
+	var art: Variant = _character_entry(character_id).get("attacks", {})
+	var overrides: Variant = _melee_override(character_id).get("attacks", {})
+	var out: Dictionary = {}
+	for step: int in range(1, ActorRuntime.ATTACK_STEP_MAX + 1):
+		var entry: Dictionary = {}
+		if art is Dictionary:
+			var from_art: Variant = (art as Dictionary).get(str(step), {})
+			if from_art is Dictionary:
+				for key: Variant in (from_art as Dictionary).keys():
+					entry[key] = (from_art as Dictionary)[key]
+		if overrides is Dictionary:
+			var from_data: Variant = (overrides as Dictionary).get(str(step), {})
+			if from_data is Dictionary:
+				for key: Variant in (from_data as Dictionary).keys():
+					entry[key] = (from_data as Dictionary)[key]
+		if not entry.is_empty():
+			out[str(step)] = entry
+	return out
+
+## 普攻判定窗口也逐段：图集里武器真正挥出去的那几帧。
+## 动作机的 attack_windup / attack_active 支持数组，按下标取当前段的时长。
 func _character_attack_profile(character_id: String) -> Dictionary:
 	var entry: Dictionary = _character_entry(character_id)
 	var override: Dictionary = _melee_override(character_id)
+	var steps: Dictionary = _attack_steps(character_id)
+	var base_windup: float = float(override.get("windup", entry.get("melee_windup", 0.0)))
+	var base_active: float = float(override.get("active", entry.get("melee_active", 0.0)))
+	var windups: Array = []
+	var actives: Array = []
+	var has_windup: bool = false
+	var has_active: bool = false
+	for step: int in range(1, ActorRuntime.ATTACK_STEP_MAX + 1):
+		var data: Dictionary = steps.get(str(step), {})
+		var windup: float = float(data.get("windup", base_windup))
+		var active: float = float(data.get("active", base_active))
+		windups.append(windup)
+		actives.append(active)
+		if windup > 0.0:
+			has_windup = true
+		if active > 0.0:
+			has_active = true
 	var profile: Dictionary = {}
-	var windup: float = float(override.get("windup", entry.get("melee_windup", 0.0)))
-	var active: float = float(override.get("active", entry.get("melee_active", 0.0)))
-	if windup > 0.0:
-		profile["attack_windup"] = windup
-	if active > 0.0:
-		profile["attack_active"] = active
+	if has_windup:
+		profile["attack_windup"] = windups
+	if has_active:
+		profile["attack_active"] = actives
 	return profile
 
 ## 每个角色的普攻前伸来自它自己的图集（attack1 挥到最远的那一帧）。

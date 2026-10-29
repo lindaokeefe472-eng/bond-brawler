@@ -163,6 +163,11 @@ python -I tools/gen_asset_spec.py
 窄相读的是同一份 `melee_config()`，所以调完「看到的范围」就是「打得到的范围」。
 调完自动写 `user://melee_tuning.json`，下次启动自动套用（headless 不读，避免污染用例）。
 
+**调 range 会写进「当前这一段」的 reach**：三段连击各有各的前伸，`attack_config()`
+用逐段 `reach` 盖掉基础 `range`。只改基础值的话判定盒原地不动，F4 等于白调。
+复位（R）会同时还原基础值和每一段的 reach。存档里写的是 `reach`、运行时叫 `range`，
+`set_melee_param` 负责换算 —— 两个键互通，别在一处只改一个。
+
 **不要在编辑器里拖 CollisionShape3D**：几何每次 `bind()` 都按参数重算，改了也会被覆盖。
 
 ## 普攻形态（近战 / 远程）
@@ -182,6 +187,24 @@ python -I tools/gen_asset_spec.py
 
 **`data/` 不随仓库分发**，新克隆的仓库里所有角色都会退回近战 —— 这是预期行为，
 远程配置在本地 `data/melee.json`（`test_melee_data.gd` 校验字段）。
+
+## 逐段普攻（atk1 / atk2 / atk3 各打各的）
+
+三段连击以前共用第 1 段的参数：前伸、时序、判定形状全都一样，动作播的却是不同的
+挥砍 —— 长枪第三段看着是横扫，判定还是第一段那一下。现在每段可以不同：
+
+- **参数来源**：manifest 的 `attacks[step]`（图集量出来的 `reach` / `windup` / `active`）
+  ← `data/melee.json` 的 `attacks[step]` 覆盖（可写 `kind` / `radius` / `projectile`）。
+  合并后进 spec 的 `melee.attacks`，`GameRoot._attack_steps()` 负责。
+- **唯一读取口**：`ActorRuntime.attack_config(step)`（`step <= 0` 取当前段），
+  基础 `melee_config()` + 逐段覆盖，`reach` 在这里换算成 `range`。
+- **形态 `kind`**：`melee`（扇形，`PlaneMath.in_cone`）/ `aoe`（绕身半径，身后也吃）/
+  `ranged`（发弹体）。逐段 `kind` > 角色级 `attack = "projectile"` > `melee`。
+  `CombatPipeline.resolve_basic_attack()` 按 `kind` 分派，`ActorView` 的判定盒也跟着变
+  （范围段画成以角色为中心的方盒，远程段只标出手点）。
+- **动作机**：`attack_windup` / `attack_active` 本来就是数组，按下标取当前段。
+- `data/melee.json` 里 `attacks` 的 `kind` / `radius` 由 `test_melee_data.gd` 校验；
+  合并逻辑和三种形态的判定由 `test_attack_shapes.gd` 盯着。
 
 ## 训练场（`scenes/training.tscn`）
 
@@ -214,7 +237,7 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-426 个测试（GdUnit4，66 个 suite）全绿，架构检查通过。
+436 个测试（GdUnit4，67 个 suite）全绿，架构检查通过。
 刷怪表和 AI 性格来自 data/stages.json（StageRepository），缺数据时退回内置兜底表。
 训练场是独立场景（TrainingRoot 继承 GameRoot，只重写刷怪），用来量命中范围与伤害。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。

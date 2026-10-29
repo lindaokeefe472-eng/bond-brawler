@@ -47,7 +47,6 @@ static func format_state(state: Dictionary) -> String:
 	var dummy_count: int = int(state.get("dummy_count", 0))
 	var distance: float = float(state.get("distance", -1.0))
 	var lane_delta: float = float(state.get("lane_delta", 0.0))
-	var reach: float = float(state.get("reach", 0.0))
 	var lane_tolerance: float = float(state.get("lane_tolerance", 0.0))
 	var last_hit: float = float(state.get("last_hit_distance", -1.0))
 	var total: float = float(state.get("total_damage", 0.0))
@@ -55,20 +54,37 @@ static func format_state(state: Dictionary) -> String:
 	var verdict: String = "打得到" if bool(state.get("would_hit", false)) else "打不到"
 	var distance_text: String = "—" if distance < 0.0 else "%.2f m" % distance
 	var last_hit_text: String = "—" if last_hit < 0.0 else "%.2f m" % last_hit
-	# 远程角色量的是弹体射程，纵深容差不参与判定，别把近战那一行照抄过去。
-	var reach_line: String
-	if bool(state.get("ranged", false)):
-		reach_line = "普攻射程 %.2f m（弹体）    当前纵深差 %.2f m" % [
-			float(state.get("projectile_range", 0.0)), lane_delta]
-	else:
-		reach_line = "普攻射程 %.2f m    纵深容差 %.2f m    当前纵深差 %.2f m" % [
-			reach, lane_tolerance, lane_delta]
 	return "\n".join(PackedStringArray([
 		"训练场",
 		"角色  %s  (%d/%d)      Q 上一个    E 下一个" % [player_name, player_index, player_count],
 		"站桩  %s  (%d/%d)      Z 上一个    C 下一个" % [dummy_name, dummy_index, dummy_count],
 		"距离 %s    判定：%s      [ ] 调远近    ; ' 调纵深" % [distance_text, verdict],
-		reach_line,
+		"普攻三段  %s" % _steps_text(state),
+		"纵深容差 %.2f m    当前纵深差 %.2f m" % [lane_tolerance, lane_delta],
 		"上次命中 %s    累计伤害 %d    命中 %d 次" % [last_hit_text, roundi(total), hits],
 		"G 站桩归位    H 清空统计    Esc 暂停    F3 碰撞形状    F4 判定盒",
 	]))
+
+## 三段普攻并成一行：段数 + 形态 + 射程。第 3 段是范围、第 1 段是近战时一眼能看出来。
+static func _steps_text(state: Dictionary) -> String:
+	var steps: Array = state.get("attacks", [])
+	var parts: PackedStringArray = []
+	for raw: Variant in steps:
+		if not (raw is Dictionary):
+			continue
+		var entry: Dictionary = raw
+		parts.append("%d %s %.2f m" % [
+			int(entry.get("step", 0)),
+			kind_label(str(entry.get("kind", "melee"))),
+			float(entry.get("range", 0.0))])
+	if parts.is_empty():
+		return "—"
+	return " ｜ ".join(parts)
+
+static func kind_label(kind: String) -> String:
+	match kind:
+		"aoe":
+			return "范围"
+		"ranged":
+			return "远程"
+	return "近战"

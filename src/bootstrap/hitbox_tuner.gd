@@ -44,7 +44,26 @@ func register(view: ActorView, character_id: String) -> void:
 	if not _ids.has(actor_id):
 		_ids.append(actor_id)
 		_ids.sort()
-	_defaults[actor_id] = view.runtime.melee_config()
+	_defaults[actor_id] = {
+		"base": _tunable_of(view.runtime),
+		"steps": _step_reaches(view.runtime),
+	}
+
+## 四个可调参数的快照。只取这几个，别把 damage_type 之类的非数值键一起存下来 ——
+## 复位时 float() 会把它们写成 0，等于悄悄改了伤害属性。
+func _tunable_of(runtime: ActorRuntime) -> Dictionary:
+	var cfg: Dictionary = runtime.melee_config()
+	var out: Dictionary = {}
+	for key: String in PARAMS.keys():
+		out[key] = float(cfg.get(key, 0.0))
+	return out
+
+## 逐段前伸的快照。F4 调 range 会改当前段的 reach，复位必须把每一段都还原。
+func _step_reaches(runtime: ActorRuntime) -> Dictionary:
+	var out: Dictionary = {}
+	for step: int in range(1, runtime.attack_step_count() + 1):
+		out[step] = runtime.attack_step_reach(step)
+	return out
 
 ## 角色被换掉（训练场切角色会重建 ActorRuntime）时清掉登记，
 ## 否则 Tab 会转到已经不存在的节点上，微调面板显示的还是旧角色。
@@ -108,8 +127,15 @@ func reset_actor(actor_id: int) -> void:
 	var defaults: Variant = _defaults.get(actor_id)
 	if view == null or not is_instance_valid(view) or view.runtime == null or not (defaults is Dictionary):
 		return
-	for key: String in (defaults as Dictionary).keys():
-		view.runtime.set_melee_param(StringName(key), float((defaults as Dictionary)[key]))
+	var snapshot: Dictionary = defaults
+	var base: Variant = snapshot.get("base", {})
+	if base is Dictionary:
+		for key: String in (base as Dictionary).keys():
+			view.runtime.set_melee_param(StringName(key), float((base as Dictionary)[key]))
+	var steps: Variant = snapshot.get("steps", {})
+	if steps is Dictionary:
+		for step: Variant in (steps as Dictionary).keys():
+			view.runtime.set_attack_step_reach(int(step), float((steps as Dictionary)[step]))
 	view.refresh_hitbox()
 
 ## 键位处理。返回 true 表示这次按键被调参器消费掉了。

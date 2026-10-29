@@ -249,7 +249,9 @@ func training_state() -> Dictionary:
 	var ranged: bool = player != null and player.is_ranged_attack()
 	var projectile_range: float = 0.0
 	if player != null:
-		var cfg: Dictionary = player.melee_config()
+		# 必须和窄相读同一份：attack_config() 带上了当前这一段的 reach / 形态，
+		# melee_config() 只有基础值，面板会算出和实际结算不一样的结论。
+		var cfg: Dictionary = player.attack_config()
 		reach = float(cfg.get("range", 0.0))
 		lane_tolerance = float(cfg.get("lane_tolerance", 0.0))
 		if ranged:
@@ -271,14 +273,33 @@ func training_state() -> Dictionary:
 		"lane_tolerance": lane_tolerance,
 		"ranged": ranged,
 		"projectile_range": projectile_range,
+		"attacks": _attack_summary(player),
 		"would_hit": would_hit,
 		"last_hit_distance": _last_hit_distance,
 		"total_damage": _total_damage,
 		"hit_count": _hit_count,
 	}
 
+## 三段普攻各自的形态和射程。面板上一行就能看出「第 3 段是范围、第 1 段是近战」。
+func _attack_summary(player: ActorRuntime) -> Array:
+	var out: Array = []
+	if player == null:
+		return out
+	for step: int in range(1, player.attack_step_count() + 1):
+		var kind: StringName = player.attack_kind(step)
+		var range_m: float = 0.0
+		match kind:
+			&"aoe":
+				range_m = float(player.attack_config(step).get("radius", 0.0))
+			&"ranged":
+				range_m = float(player.projectile_config(step).get("range", 0.0))
+			_:
+				range_m = float(player.attack_config(step).get("range", 0.0))
+		out.append({"step": step, "kind": str(kind), "range": range_m})
+	return out
+
 ## 面板上的「判定」必须和真实结算用同一个谓词，否则调试工具本身就在骗人。
-##   近战：PlaneMath.in_cone（和 CombatPipeline.resolve_melee 完全一致）
+##   近战：PlaneMath.in_cone（和 CombatPipeline.resolve_basic_attack 完全一致）
 ##   远程：弹体沿 x 轴直线飞，命中条件是「在正前方、射程内、横向偏移 < 命中半径 + 身位半径」
 func _would_hit(player: ActorRuntime, dummy: ActorRuntime, cfg: Dictionary,
 		ranged: bool) -> bool:

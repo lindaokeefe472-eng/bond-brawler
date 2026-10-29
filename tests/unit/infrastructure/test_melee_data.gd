@@ -6,7 +6,7 @@ extends GdUnitTestSuite
 
 const MELEE_PATH: String = "res://data/melee.json"
 const MANIFEST_PATH: String = "res://assets/sprites/characters/manifest.json"
-const KNOWN_ATTACKS: Array[String] = ["melee", "projectile"]
+const KNOWN_ATTACKS: Array[String] = ["melee", "aoe", "projectile"]
 
 func before(_do_skip := not FileAccess.file_exists(MELEE_PATH),
 		_skip_reason := "需要本地 data/，见 README「数据与素材」") -> void:
@@ -75,6 +75,26 @@ func test_projectile_sprite_slugs_exist() -> void:
 			continue
 		assert_bool(known is Dictionary and (known as Dictionary).has(slug)).override_failure_message(
 				"%s 的弹体贴图 %s 在 manifest 里不存在" % [character_id, slug]).is_true()
+
+## 逐段覆盖：kind 必须认识，范围攻击必须给 radius。
+func test_attack_step_overrides_are_valid() -> void:
+	var characters: Dictionary = _characters()
+	for character_id: String in characters.keys():
+		var attacks: Variant = (characters[character_id] as Dictionary).get("attacks", {})
+		if not (attacks is Dictionary):
+			continue
+		for step: String in (attacks as Dictionary).keys():
+			var entry: Variant = (attacks as Dictionary)[step]
+			assert_bool(entry is Dictionary).override_failure_message(
+					"%s 的第 %s 段不是字典" % [character_id, step]).is_true()
+			var data: Dictionary = entry
+			if data.has("kind"):
+				var kind: String = str(data["kind"])
+				assert_bool(KNOWN_ATTACKS.has(kind)).override_failure_message(
+						"%s 第 %s 段的 kind = %s 不认识" % [character_id, step, kind]).is_true()
+			if str(data.get("kind", "")) == "aoe":
+				assert_float(float(data.get("radius", 0.0))).override_failure_message(
+						"%s 第 %s 段是范围攻击却没有 radius" % [character_id, step]).is_greater(0.0)
 
 func _characters() -> Dictionary:
 	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(MELEE_PATH))
