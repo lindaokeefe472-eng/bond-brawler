@@ -5,7 +5,7 @@
 ## 「新完整存档」两种状态。读档时任何解析/版本问题都回退为空字典并告警，
 ## 由上层决定提示玩家还是开新档，绝不让坏存档把游戏拖崩。
 class_name SaveStore
-extends RefCounted
+extends ISaveRepository
 
 const SAVE_VERSION: int = 1
 const DEFAULT_DIR: String = "user://saves"

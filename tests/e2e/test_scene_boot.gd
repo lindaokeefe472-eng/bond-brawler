@@ -290,3 +290,20 @@ func test_damage_reaches_audio_director() -> void:
 	await runner.simulate_frames(3)
 	assert_int(audio.play_count()).override_failure_message(
 			"伤害事件没有传到 AudioDirector，音效链路是断的").is_greater(before)
+
+## 存档接线：_save_now() 必须真的把快照写下去。用临时目录，别覆盖玩家真实存档。
+func test_save_is_wired_and_writes_snapshot() -> void:
+	var runner := _boot()
+	await runner.simulate_frames(SPAWN_FRAMES)
+	var scene: Node = runner.scene()
+	var temp_dir: String = "user://test_scene_save"
+	var service := SaveService.new(SaveStore.new(temp_dir))
+	scene.set("_save", service)
+	scene.call("_save_now")
+	assert_bool(service.has_save()).override_failure_message("_save_now 没有写出存档").is_true()
+	assert_bool(service.load_snapshot().is_empty()).is_false()
+	var dir: DirAccess = DirAccess.open(temp_dir)
+	if dir != null:
+		for file_name: String in dir.get_files():
+			DirAccess.remove_absolute(temp_dir.path_join(file_name))
+	DirAccess.remove_absolute(temp_dir)

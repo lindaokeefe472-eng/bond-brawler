@@ -147,9 +147,11 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-371 个测试（GdUnit4，55 个 suite）全绿，架构检查通过。
+380 个测试（GdUnit4，57 个 suite）全绿，架构检查通过。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。
 音效走 IAudio 端口 + AudioDirector，占位音效由 tools/gen_placeholder_sfx.py 合成，映射在 assets/audio/cues.json。
+存档走 ISaveRepository 端口 + SaveStore（原子写 + 版本信封 + 损坏回退），
+业务快照在 SaveService（含版本迁移）；天赋加成由 TalentService 折成 CombatModifier。
 其中 4 个是场景端到端（真跑 main.tscn），10 个是领域端到端。
 
 待接入：真实关卡美术与视差背景、音效、联机同步、天赋 UI。

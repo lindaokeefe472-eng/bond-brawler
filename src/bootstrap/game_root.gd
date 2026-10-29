@@ -69,6 +69,8 @@ var _flow: SceneFlow = null
 var _flow_view: FlowView = null
 var _settings: SettingsModel = null
 var _audio: AudioDirector = null
+var _save: SaveService = null
+var _talents: TalentService = null
 ## 玩家死亡到弹出结算之间的缓冲，留给死亡动画。
 var _result_delay: float = -1.0
 var _actor_scene: PackedScene = null
@@ -82,7 +84,11 @@ var _accumulator: float = 0.0
 var _broadphase_hits: int = 0
 
 func _ready() -> void:
+	# 关窗要留时间存档；headless（CI/测试）没有窗口，别动全局行为。
+	if DisplayServer.get_name() != "headless":
+		get_tree().auto_accept_quit = false
 	_build_services()
+	_build_save()
 	_build_audio()
 	_build_arena()
 	_build_projectiles()
@@ -95,6 +101,7 @@ func _ready() -> void:
 	_tuner.apply_saved_overrides()
 	_build_hud()
 	_build_flow()
+	_load_save()
 
 func _build_services() -> void:
 	_app = CompositionRoot.create(DATA_ROOT, RNG_SEED)
@@ -115,6 +122,11 @@ func _build_tuner() -> void:
 	add_child(_tuner)
 
 ## 音效：库里只有数据，真正发声在 AudioDirector。
+## 存档：SaveStore 管写盘，SaveService 管业务快照。
+func _build_save() -> void:
+	_save = SaveService.new(SaveStore.new())
+	_talents = TalentService.new(_bus)
+
 func _build_audio() -> void:
 	_audio = AudioDirector.new()
 	_audio.configure(AudioLibrary.new(_data), self)
@@ -140,7 +152,25 @@ func _build_flow() -> void:
 	_flow_view.bind(_flow)
 	_sync_hud_visibility()
 
-## 设置里的音量落到总线上。阶段 4 接存档后，这里改成从存档读初值。
+## 读档：设置和天赋都在这里恢复。关卡进度要等阶段 5 有内容了再填。
+func _load_save() -> void:
+	if _save == null or not _save.has_save():
+		return
+	var snapshot: Dictionary = _save.load_snapshot()
+	if snapshot.is_empty():
+		return
+	_save.apply_snapshot(snapshot, null, _talents.tree if _talents != null else null, _settings)
+	_apply_settings_volumes()
+	if _flow_view != null and _settings != null:
+		_flow_view.bind_settings(_settings)
+	print("[save] 已读取存档")
+
+func _save_now() -> void:
+	if _save == null:
+		return
+	_save.save(null, _talents.tree if _talents != null else null, _settings)
+
+## 设置里的音量落到总线上。
 func _on_volume_changed(channel: StringName, value: float) -> void:
 	if _audio == null:
 		return
@@ -408,6 +438,7 @@ func _physics_process(delta: float) -> void:
 			if _flow != null and _flow.finish(false):
 				_flow_view.render(_flow)
 				_sync_hud_visibility()
+				_save_now()
 
 ## 音频时钟：debounce 依赖它。放在 _process 里，暂停时也跟着停。
 func _process(delta: float) -> void:
@@ -512,6 +543,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		var tree: SceneTree = get_tree()
 		tree.debug_collisions_hint = not tree.debug_collisions_hint
 		print("[debug] 碰撞形状显示: %s" % str(tree.debug_collisions_hint))
+
+## 关窗时先存档。auto_accept_quit 关掉，否则通知还没处理完进程就退了。
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_save_now()
+		get_tree().quit()
 
 func _exit_tree() -> void:
 	if _audio != null:
