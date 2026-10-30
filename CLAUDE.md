@@ -118,21 +118,26 @@ python -I tools/gen_asset_spec.py
 4. 连着挨打要重播受击动画（`ActorView.flash()` 里 `_sprite.restart()`），
    否则 `_last_anim` 已是 hurt，`_update_animation` 会提前返回，动画停在最后一帧。
 
-动作状态机五条（`loco_action_machine.gd`，改之前先读）：
+动作状态机六条（`loco_action_machine.gd`，改之前先读）：
 1. **输入按渲染帧锁存**，不能在逻辑步里直接读 `is_action_just_pressed`：固定步长下
    逻辑步一帧跑 0 次（高刷新率）或多次（追赶），顿帧 `time_scale=0` 时更是完全不跑，
    按下会整个消失。`InputAdapter.capture()` 在物理帧开头采一次，`_process` 在本帧
    没跑物理步时补采一次；`poll()` 消费并清空。物理帧采过就不能再采，`just_pressed`
    整帧为真，会重复触发。
-2. **技能只能在可行动状态起手**（IDLE/RUN/LAND/JUMP/FALL）。攻击/冲刺/受击/施法中
+2. **输入仲裁：优先级决定顺序，不决定生死。** 本帧没被消费的按下自动转入 `_pending`
+   （最多保留 `PENDING_WINDOW` = 0.8 秒，要盖住最长的一套攻击），解锁后按
+   攻击 > 跳跃 > 冲刺 依次兑现。同一帧按攻击+跳跃 = 先攻击、打完再跳，不会丢。
+   技能不进这个队列（有独立槽位，且受状态门限制）。
+3. **攻击连段是计数队列** `_combo_queue`：攻击期间每按一下加一（上限是剩余段数），
+   恢复段一开始消费一段 —— 连按三下就打三段，不是「有/没有」。恢复段还可以用冲刺取消。
+   0.29~0.46 秒的后摇不可取消会让每一次挥空都像卡住。
+4. **技能只能在可行动状态起手**（IDLE/RUN/LAND/JUMP/FALL）。攻击/冲刺/受击/施法中
    一律拒绝，硬直还会 `caster.interrupt(&"hitstun")`。否则能在硬直里放技能，
    还能把自己攻击的判定帧取消掉。
-3. **连段输入覆盖整个攻击窗口**：攻击中按下的下一段记在 `_combo_queued`，恢复段一开始
-   就接，不等 0.12 秒缓冲过期；恢复段还可以用冲刺取消。0.29~0.46 秒的后摇不可取消
-   会让每一次挥空都像卡住。
-4. **格挡只在地面可行动状态生效**，攻击/冲刺/受击中按住不白嫖减伤（耐力消耗尚未实现）。
-5. **场地边界用 `PlaneMath.clamp_arena`**：横向夹到 `ARENA_HALF_WIDTH - BODY_RADIUS`，
+5. **格挡只在地面可行动状态生效**，攻击/冲刺/受击中按住不白嫖减伤（耐力消耗尚未实现）。
+6. **场地边界用 `PlaneMath.clamp_arena`**：横向夹到 `ARENA_HALF_WIDTH - BODY_RADIUS`，
    纵深夹到 lane 带。只夹 lane 玩家会一路走出场地。空中死亡继续受重力落地，不能悬空。
+   攻击起手那一帧不继承跑动速度（否则会先滑出 0.1 m）。
 
 判定盒（Area3D）四条：
 1. 尺寸/位置由 `melee_config()` 的 range / lane_tolerance / hit_height 现算，
@@ -263,7 +268,7 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-448 个测试（GdUnit4，67 个 suite）全绿，架构检查通过。
+453 个测试（GdUnit4，67 个 suite）全绿，架构检查通过。
 刷怪表和 AI 性格来自 data/stages.json（StageRepository），缺数据时退回内置兜底表。
 训练场是独立场景（TrainingRoot 继承 GameRoot，只重写刷怪），用来量命中范围与伤害。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。

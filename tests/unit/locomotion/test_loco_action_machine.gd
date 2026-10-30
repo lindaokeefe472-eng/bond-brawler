@@ -367,3 +367,69 @@ func test_dash_distance_matches_its_duration() -> void:
 	var expected: float = 16.0 * 0.36
 	assert_float(out.plane_pos.x).override_failure_message(
 			"冲刺多走了或少走了：位移应等于速度 × 时长").is_equal_approx(expected, 0.30)
+
+# ---------------------------------------------------------------- 输入仲裁
+## 连按三下就该打三段：连段队列是计数，不是「有/没有」。
+func test_mashing_attack_during_first_hit_plays_three_steps() -> void:
+	var m := _make(_attack_profile())
+	# 连按 = 按一下松一下，只认按下沿；按住不放不算新的一次。
+	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.01, _empty(), true)
+	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.01, _empty(), true)
+	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	var seen: Array[int] = []
+	for i: int in 100:
+		var out := m.tick(0.01, _empty(), true)
+		if out.state == LocoActionState.ATTACK \
+				and (seen.is_empty() or seen[seen.size() - 1] != m.combo_index()):
+			seen.append(m.combo_index())
+	assert_array(seen).override_failure_message(
+			"连按三下应该依次打出第 1/2/3 段，实际 %s" % str(seen)).is_equal([0, 1, 2])
+
+## 起手阶段按的冲刺不能丢：后摇一开始就兑现。
+func test_dash_pressed_during_windup_cancels_at_recovery() -> void:
+	var m := _make(_attack_profile())
+	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.01, _in(0.0, 0.0, false, true), true)
+	var out: LocoActionOutput = null
+	for i: int in 30:
+		out = m.tick(0.01, _empty(), true)
+		if out.state == LocoActionState.DASH:
+			break
+	assert_int(out.state).override_failure_message(
+			"起手阶段按下的冲刺应该在后摇开始时兑现").is_equal(LocoActionState.DASH)
+
+## 同一帧按攻击+跳跃：先攻击，跳跃在攻击结束后兑现，不能吞掉。
+func test_jump_pressed_with_attack_fires_after_the_attack() -> void:
+	var m := _make(_attack_profile())
+	var out := m.tick(0.0, _in(0.0, 0.0, true, false, true), true)
+	assert_int(out.state).is_equal(LocoActionState.ATTACK)
+	for i: int in 60:
+		out = m.tick(0.01, _empty(), true)
+		if out.state == LocoActionState.JUMP:
+			break
+	assert_int(out.state).override_failure_message(
+			"攻击结束后应该起跳，而不是把跳跃吞掉").is_equal(LocoActionState.JUMP)
+
+## 冲刺中按的攻击不能丢：冲刺结束就出手。
+func test_attack_pressed_during_dash_fires_when_dash_ends() -> void:
+	var m := _make(_attack_profile())
+	m.tick(0.0, _in(0.0, 0.0, false, true), true)
+	assert_int(m.current_state()).is_equal(LocoActionState.DASH)
+	m.tick(0.05, _in(0.0, 0.0, false, false, true), true)
+	var out: LocoActionOutput = null
+	for i: int in 40:
+		out = m.tick(0.01, _empty(), true)
+		if out.state == LocoActionState.ATTACK:
+			break
+	assert_int(out.state).override_failure_message(
+			"冲刺中按下的攻击应该在冲刺结束后出手").is_equal(LocoActionState.ATTACK)
+
+## 攻击起手那一帧不能继承跑动全速：否则会先滑出 0.1 m。
+func test_attack_start_tick_does_not_lurch_at_full_speed() -> void:
+	var m := _make()
+	var out := m.tick(1.0 / 60.0, _in(1.0, 0.0, false, false, true), true)
+	assert_int(out.state).is_equal(LocoActionState.ATTACK)
+	assert_float(out.plane_pos.x).override_failure_message(
+			"攻击起手那一帧滑出了 %.2f m" % out.plane_pos.x).is_equal_approx(0.0, 0.001)

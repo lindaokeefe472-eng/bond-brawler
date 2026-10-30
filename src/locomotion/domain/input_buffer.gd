@@ -35,6 +35,13 @@ func is_buffered(action: StringName, window: float) -> bool:
 	var age: float = _now - float(_press_times[action])
 	return age >= 0.0 and age <= window + TIME_EPSILON
 
+## 某个动作最近一次按下的时间戳；没有记录时返回 -INF。
+## 状态机用它把「本帧没消费掉」的按下转成待执行队列，避免被 0.12 秒窗口吞掉。
+func press_time(action: StringName) -> float:
+	if not _press_times.has(action):
+		return -INF
+	return float(_press_times[action])
+
 ## 窗口内命中则返回 true 并清空该动作；窗口外只返回 false 且保留记录，
 ## 让调用方自己决定何时丢弃（例如空中的跳跃预输入要留到落地再吃）。
 func consume(action: StringName, window: float) -> bool:

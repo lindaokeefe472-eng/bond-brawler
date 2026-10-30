@@ -17,6 +17,15 @@ const MOVE_DEADZONE_SQUARED: float = 0.0001
 const TIME_EPSILON: float = 0.000001
 ## 进入硬直后的免疫窗口（秒）：这段时间内再挨打只吃击退不吃硬直。
 const HITSTUN_IMMUNITY: float = 0.35
+## 锁定期间按下的动作最多保留多久（秒）。要覆盖最长的一套攻击（约 0.7 秒），
+## 但又不能无限保留 —— 很久以前按的键不该诈尸。
+const PENDING_WINDOW: float = 0.8
+## 需要跨状态保留的离散动作。技能走自己的槽位，不在这里。
+const BUFFERED_ACTIONS: Array[StringName] = [
+	InputBuffer.ACTION_ATTACK,
+	InputBuffer.ACTION_JUMP,
+	InputBuffer.ACTION_DASH,
+]
 
 ## profile 缺省值：与 data/actions.json 的还原数值保持一致。
 ## 数值集中在这里，逻辑里不再出现裸数字，改手感只改这一处或外部 JSON。
@@ -70,9 +79,13 @@ var _attack_phase: int = ATTACK_PHASE_WINDUP
 var _attack_phase_time: float = 0.0
 var _combo_index: int = 0
 var _combo_timer: float = 0.0
-## 攻击过程中按下的「下一段」。整个攻击窗口内都记住，恢复段一开始就接。
-## 只靠 0.12 秒输入缓冲的话，玩家看见命中（ACTIVE）时按下，等恢复段开始时早已过期。
-var _combo_queued: bool = false
+## 攻击过程中按下的「下一段」数量。整个攻击窗口内累计，恢复段每段消费一个 ——
+## 连按三下就该打出三段，不能只记「有/没有」。
+var _combo_queue: int = 0
+## 锁定状态下按下的其它动作：等解锁再执行。值 = 按下时的 _time。
+## 为什么不用时间缓冲：攻击 0.7 秒、冲刺 0.36 秒，0.12 秒的缓冲必然过期，
+## 玩家在动作里按下的冲刺/跳跃会整个消失。
+var _pending: Dictionary = {}
 
 var _buffer: InputBuffer = InputBuffer.new()
 var _prev_jump: bool = false
@@ -112,6 +125,7 @@ func tick(dt: float, input: LocoInputFrame, alive: bool) -> LocoActionOutput:
 	var move: Vector2 = input.clamped_move() if input != null else Vector2.ZERO
 	_update_state(step, input, move)
 	_integrate(step)
+	_carry_unconsumed_input()
 	_update_coyote(step)
 	return _build_output()
 
@@ -125,7 +139,8 @@ func _enter_dead() -> void:
 	_invulnerable_timer = 0.0
 	_hurt_timer = 0.0
 	_skill_timer = 0.0
-	_combo_queued = false
+	_combo_queue = 0
+	_pending.clear()
 
 ## 死亡后继续下落：空中被打死不该停在半空。横向不再移动。
 func _settle_dead(dt: float) -> void:
@@ -160,14 +175,33 @@ func _read_input(input: LocoInputFrame) -> void:
 	if input.dash and not _prev_dash:
 		_buffer.press(InputBuffer.ACTION_DASH)
 	if input.attack and not _prev_attack:
-		_buffer.press(InputBuffer.ACTION_ATTACK)
-		# 攻击中按下 = 预约下一段。等恢复段开始再切，不能立刻切 ——
-		# ACTIVE 还没跑完就切会把自己的判定帧吃掉。
 		if _state == LocoActionState.ATTACK:
-			_combo_queued = true
+			# 攻击中按下 = 预约下一段。等恢复段开始再切，不能立刻切 ——
+			# ACTIVE 还没跑完就切会把自己的判定帧吃掉。
+			# 这一下不进缓冲：否则会被待执行队列再消费一次，多打一段。
+			var combo_count: int = maxi(int(_profile.get("attack_combo_count", 1)), 1)
+			var remaining: int = maxi(combo_count - 1 - _combo_index, 0)
+			_combo_queue = clampi(_combo_queue + 1, 0, remaining)
+		else:
+			_buffer.press(InputBuffer.ACTION_ATTACK)
 	_prev_jump = input.jump
 	_prev_dash = input.dash
 	_prev_attack = input.attack
+
+## 本帧没被消费的按下转入待执行队列。
+##
+## 为什么必须这样：输入缓冲只有 0.12 秒，而攻击 0.7 秒、冲刺 0.36 秒。
+## 「同一帧按了攻击+跳跃」时只有攻击被消费，跳跃如果只留在缓冲里，0.12 秒后
+## 就没了 —— 玩家按了却没反应。转入 pending 后，动作结束后按优先级依次兑现。
+func _carry_unconsumed_input() -> void:
+	for action: StringName in BUFFERED_ACTIONS:
+		var stamp: float = _buffer.press_time(action)
+		if stamp <= -INF:
+			continue
+		if _time - stamp > GameConstants.INPUT_BUFFER_WINDOW:
+			continue
+		if not _pending.has(action) or float(_pending[action]) < stamp:
+			_pending[action] = stamp
 
 ## 高度 > 0 就是空中；地面/空中状态由高度单向推导，避免两套状态互相打架。
 func _refresh_ground_state() -> void:
@@ -206,6 +240,8 @@ func _update_ground(dt: float, move: Vector2) -> void:
 
 	# 优先级：攻击 > 跳跃 > 冲刺。攻击最常按，先给它，减少误触发。
 	if _try_attack():
+		# 攻击起手不继承跑动速度：否则起手那一帧会以全速滑出 0.1 m。
+		_velocity = Vector2.ZERO
 		return
 	if _try_jump():
 		return
@@ -330,42 +366,47 @@ func _start_attack(chain: bool = false) -> void:
 		_combo_index += 1
 	else:
 		_combo_index = 0
-	_combo_queued = false
 	_combo_timer = 0.0
 	_attack_phase = ATTACK_PHASE_WINDUP
 	_attack_phase_time = 0.0
 	_set_state(LocoActionState.ATTACK)
 
 ## 恢复段一开始就接下一段：玩家在看见命中时按下，不该等后摇播完才生效。
+## 队列是计数：连按三下就打三段。
 func _try_combo_chain() -> bool:
-	if not _combo_queued:
+	if _combo_queue <= 0:
 		return false
 	var combo_count: int = maxi(int(_profile.get("attack_combo_count", 1)), 1)
 	if _combo_index + 1 >= combo_count:
-		_combo_queued = false
+		_combo_queue = 0
 		return false
+	_combo_queue -= 1
 	_start_attack(true)
 	return true
 
 ## 后摇可以用冲刺取消：被围住时这是唯一的脱身手段。
+## 用 _take_action 而不是 0.12 秒缓冲：起手阶段按的冲刺要留到后摇再兑现。
 func _try_dash_cancel() -> bool:
-	if not _buffer.is_buffered(InputBuffer.ACTION_DASH, GameConstants.INPUT_BUFFER_WINDOW):
+	if not _take_action(InputBuffer.ACTION_DASH):
 		return false
-	_buffer.consume(InputBuffer.ACTION_DASH, GameConstants.INPUT_BUFFER_WINDOW)
 	_start_dash()
 	return true
 
-## recovery 结束：缓冲里的攻击优先接段，其次跳跃、冲刺。
+## recovery 结束：队列里的攻击优先接段，其次跳跃、冲刺。
 func _finish_attack() -> void:
-	_combo_queued = false
 	_combo_timer = float(_profile.get("attack_combo_window", 0.0))
 	var combo_count: int = maxi(int(_profile.get("attack_combo_count", 1)), 1)
+	var can_chain: bool = _combo_index + 1 < combo_count
 	# 直接接下一段，不经过 IDLE，避免状态事件与动画来回抖一下。
-	if _combo_index + 1 < combo_count \
-			and _buffer.is_buffered(InputBuffer.ACTION_ATTACK, GameConstants.INPUT_BUFFER_WINDOW):
-		_buffer.consume(InputBuffer.ACTION_ATTACK, GameConstants.INPUT_BUFFER_WINDOW)
+	if can_chain and _combo_queue > 0:
+		_combo_queue -= 1
 		_start_attack(true)
 		return
+	if can_chain and _take_action(InputBuffer.ACTION_ATTACK):
+		_start_attack(true)
+		return
+	# 连段到头：多按的那几下作废，别留到下一次攻击里诈尸。
+	_combo_queue = 0
 
 	_set_state(LocoActionState.IDLE if not _is_airborne() else LocoActionState.FALL)
 	if _try_attack():
@@ -401,31 +442,41 @@ func _update_hurt(dt: float) -> void:
 
 # ------------------------------------------------------------------ 动作入口
 func _try_attack() -> bool:
-	if not _buffer.is_buffered(InputBuffer.ACTION_ATTACK, GameConstants.INPUT_BUFFER_WINDOW):
-		return false
 	if not _can_attack():
 		return false
-	_buffer.consume(InputBuffer.ACTION_ATTACK, GameConstants.INPUT_BUFFER_WINDOW)
+	if not _take_action(InputBuffer.ACTION_ATTACK):
+		return false
 	_start_attack()
 	return true
 
 func _try_jump() -> bool:
-	if not _buffer.is_buffered(InputBuffer.ACTION_JUMP, GameConstants.INPUT_BUFFER_WINDOW):
-		return false
 	if not _can_jump():
 		return false
-	_buffer.consume(InputBuffer.ACTION_JUMP, GameConstants.INPUT_BUFFER_WINDOW)
+	if not _take_action(InputBuffer.ACTION_JUMP):
+		return false
 	_start_jump()
 	return true
 
 func _try_dash() -> bool:
-	if not _buffer.is_buffered(InputBuffer.ACTION_DASH, GameConstants.INPUT_BUFFER_WINDOW):
-		return false
 	if not _can_dash():
 		return false
-	_buffer.consume(InputBuffer.ACTION_DASH, GameConstants.INPUT_BUFFER_WINDOW)
+	if not _take_action(InputBuffer.ACTION_DASH):
+		return false
 	_start_dash()
 	return true
+
+## 取一个待执行动作：先看锁定期间预约的（不受 0.12 秒窗口限制），再看时间缓冲。
+## 优先级由调用顺序决定：地面/空中都是 攻击 > 跳跃 > 冲刺；后摇里是 连段 > 冲刺。
+func _take_action(action: StringName) -> bool:
+	var stamp: Variant = _pending.get(action)
+	if stamp is float:
+		_pending.erase(action)
+		if _time - float(stamp) <= PENDING_WINDOW:
+			_buffer.clear_action(action)
+			return true
+	if _buffer.consume(action, GameConstants.INPUT_BUFFER_WINDOW):
+		return true
+	return false
 
 func _can_jump() -> bool:
 	if not _can_dash():
@@ -488,7 +539,8 @@ func request_skill_lock(duration: float) -> void:
 	_velocity = Vector2.ZERO
 	_combo_timer = 0.0
 	_combo_index = 0
-	_combo_queued = false
+	_combo_queue = 0
+	_pending.clear()
 	_set_state(LocoActionState.SKILL)
 
 func apply_hitstun(duration: float, knockback: Vector2) -> void:
@@ -509,7 +561,8 @@ func apply_hitstun(duration: float, knockback: Vector2) -> void:
 	_velocity = knockback
 	_combo_timer = 0.0
 	_combo_index = 0
-	_combo_queued = false
+	_combo_queue = 0
+	_pending.clear()
 	_jump_cut_used = true
 	_set_state(LocoActionState.HURT)
 
