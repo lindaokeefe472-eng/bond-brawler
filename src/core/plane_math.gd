@@ -33,6 +33,12 @@ static func in_cone(a: Vector2, facing: int, b: Vector2, reach: float, half_arc:
 static func clamp_lane(p: Vector2) -> Vector2:
 	return Vector2(p.x, clampf(p.y, GameConstants.LANE_MIN, GameConstants.LANE_MAX))
 
+## 把角色夹进场地：横向是墙（中心最多贴到墙内表面减去身位半径），纵深是带。
+## 之前只夹了纵深，玩家能一路走出场地，击退也能把人打出界。
+static func clamp_arena(p: Vector2) -> Vector2:
+	var limit: float = GameConstants.ARENA_HALF_WIDTH - GameConstants.BODY_RADIUS
+	return Vector2(clampf(p.x, -limit, limit), clampf(p.y, GameConstants.LANE_MIN, GameConstants.LANE_MAX))
+
 ## 由输入方向得到朝向（-1 左 / 1 右），0 时保持原朝向。
 static func facing_from_input(dx: float, current: int) -> int:
 	if dx > 0.01:

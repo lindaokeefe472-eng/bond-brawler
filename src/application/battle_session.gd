@@ -251,7 +251,8 @@ func _resolve_hits() -> void:
 		if actor.consume_attack_activation():
 			actor.begin_attack_swing()
 			# 远程段在起手那一帧放一发弹体，整段 ACTIVE 不再做命中判定。
-			if actor.is_ranged_attack():
+			# 同帧被硬直打断时不再出手：近战有 is_attack_active 挡着，远程也要一致。
+			if actor.is_attack_active() and actor.is_ranged_attack():
 				_fire_basic_projectile(actor)
 		# 整个 ACTIVE 窗口每帧都判：盒子亮着的时候就是真能打到的时候。
 		# 近战扇形和绕身范围都走这一条，形态由 attack_config 的 kind 决定。

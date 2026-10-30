@@ -21,21 +21,55 @@ const SKILL_ACTIONS: Array = [&"skill_1", &"skill_2", &"skill_3", &"skill_4"]
 ## 小于它视为没有方向输入，避免摇杆漂移把 IDLE 顶成 RUN。
 const MOVE_DEADZONE: float = 0.2
 
-## 采样当前帧。跳跃/冲刺/攻击/技能用「按下沿」，格挡用「按住」。
+## 按下沿锁存。逻辑步与渲染帧不是 1:1（固定步长追赶、顿帧 time_scale=0），
+## 在逻辑步里直接读 is_action_just_pressed 会漏掉两次采样之间的按下 ——
+## 顿帧有 45~110 ms，那段时间里按下的下一段会整个消失。
+var _latched_jump: bool = false
+var _latched_dash: bool = false
+var _latched_attack: bool = false
+var _latched_skills: Array[bool] = [false, false, false, false]
+
+## 每渲染帧调用一次：只记按下，不消费。
+func capture() -> void:
+	latch_edges(
+		Input.is_action_just_pressed(ACTION_JUMP),
+		Input.is_action_just_pressed(ACTION_DASH),
+		Input.is_action_just_pressed(ACTION_ATTACK),
+		_just_pressed_skills())
+
+## 纯函数入口：把一次采样的按下沿并进锁存（headless 用例直接调它）。
+func latch_edges(jump: bool, dash: bool, attack: bool, skills: Array) -> void:
+	_latched_jump = _latched_jump or jump
+	_latched_dash = _latched_dash or dash
+	_latched_attack = _latched_attack or attack
+	for slot: int in range(mini(skills.size(), LocoInputFrame.SKILL_SLOTS)):
+		if bool(skills[slot]):
+			_latched_skills[slot] = true
+
+## 丢掉还没被消费的按下。暂停/切场景时调用，避免恢复后补放一个旧按键。
+func clear() -> void:
+	_latched_jump = false
+	_latched_dash = false
+	_latched_attack = false
+	for slot: int in range(LocoInputFrame.SKILL_SLOTS):
+		_latched_skills[slot] = false
+
+## 消费锁存并清空。方向与格挡是「按住」语义，仍然实时采样。
 func poll() -> LocoInputFrame:
 	var raw_move := Vector2(
 		Input.get_action_strength(ACTION_MOVE_RIGHT) - Input.get_action_strength(ACTION_MOVE_LEFT),
 		Input.get_action_strength(ACTION_MOVE_DOWN) - Input.get_action_strength(ACTION_MOVE_UP))
-	var skills: Array[bool] = []
+	var frame: LocoInputFrame = build_frame(
+		raw_move, _latched_jump, _latched_dash, _latched_attack,
+		Input.is_action_pressed(ACTION_GUARD), _latched_skills)
+	clear()
+	return frame
+
+func _just_pressed_skills() -> Array[bool]:
+	var out: Array[bool] = []
 	for action: StringName in SKILL_ACTIONS:
-		skills.append(Input.is_action_just_pressed(action))
-	return build_frame(
-		raw_move,
-		Input.is_action_just_pressed(ACTION_JUMP),
-		Input.is_action_just_pressed(ACTION_DASH),
-		Input.is_action_just_pressed(ACTION_ATTACK),
-		Input.is_action_pressed(ACTION_GUARD),
-		skills)
+		out.append(Input.is_action_just_pressed(action))
+	return out
 
 ## 长度超过 1 时归一化；小于死区归零；介于两者之间保留摇杆的力度。
 static func normalize_move(raw: Vector2, deadzone: float = MOVE_DEADZONE) -> Vector2:

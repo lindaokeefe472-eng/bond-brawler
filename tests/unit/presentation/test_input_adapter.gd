@@ -61,3 +61,36 @@ func test_gamepad_dpad_maps_to_move_right() -> void:
 	event.button_index = JOY_BUTTON_DPAD_RIGHT
 	event.pressed = true
 	assert_bool(InputMap.event_is_action(event, &"move_right")).is_true()
+
+## 按下沿锁存：逻辑步可能一帧跑 0 次（高刷新率）或完全不跑（顿帧 time_scale=0），
+## 在逻辑步里直接读 just_pressed 会漏键。锁存必须留到被消费为止。
+func test_latched_press_survives_until_polled() -> void:
+	var adapter := InputAdapter.new()
+	adapter.latch_edges(false, false, true, [true, false, false, false])
+	var first: LocoInputFrame = adapter.poll()
+	assert_bool(first.attack).override_failure_message("锁存的攻击按下沿丢了").is_true()
+	assert_bool(first.skills[0]).is_true()
+	# 消费后不能重复触发，否则一次按键会变成两次攻击。
+	var second: LocoInputFrame = adapter.poll()
+	assert_bool(second.attack).is_false()
+	assert_bool(second.skills[0]).is_false()
+
+## 两次采样之间按下多个键：都要记住，不能被后一次覆盖。
+func test_multiple_latches_before_a_tick_are_coalesced() -> void:
+	var adapter := InputAdapter.new()
+	adapter.latch_edges(false, false, true, [])
+	adapter.latch_edges(true, false, false, [])
+	var frame: LocoInputFrame = adapter.poll()
+	assert_bool(frame.attack).is_true()
+	assert_bool(frame.jump).is_true()
+
+## 暂停/切场景时要丢掉没消费的按下，避免恢复后补放一个旧按键。
+func test_clear_drops_unconsumed_presses() -> void:
+	var adapter := InputAdapter.new()
+	adapter.latch_edges(true, true, true, [false, true, false, false])
+	adapter.clear()
+	var frame: LocoInputFrame = adapter.poll()
+	assert_bool(frame.jump).is_false()
+	assert_bool(frame.dash).is_false()
+	assert_bool(frame.attack).is_false()
+	assert_bool(frame.skills[1]).is_false()

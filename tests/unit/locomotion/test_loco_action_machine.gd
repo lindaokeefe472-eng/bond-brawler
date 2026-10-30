@@ -310,3 +310,60 @@ func test_hitstun_ignored_during_invulnerability() -> void:
 	assert_int(m.current_state()).is_equal(LocoActionState.DASH)
 	m.apply_hitstun(0.2, Vector2.ZERO)
 	assert_int(m.current_state()).is_equal(LocoActionState.DASH)
+
+# ---------------------------------------------------------------- 连段 / 取消 / 边界
+## ACTIVE 里按下的下一段也要算数：玩家看见命中就按，等 0.12 秒缓冲过期就太晚了。
+func test_attack_pressed_during_active_chains_at_recovery() -> void:
+	var m := _make(_attack_profile())
+	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.11, _empty(), true)
+	assert_int(m.attack_phase()).is_equal(LocoActionMachine.ATTACK_PHASE_ACTIVE)
+	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	var out := m.tick(0.1, _empty(), true)
+	assert_int(out.state).is_equal(LocoActionState.ATTACK)
+	assert_int(m.combo_index()).override_failure_message(
+			"ACTIVE 里按下的下一段应该在恢复段开始时接上").is_equal(1)
+	assert_int(m.attack_phase()).override_failure_message(
+			"接段后应该从新一段的起手帧开始").is_equal(LocoActionMachine.ATTACK_PHASE_WINDUP)
+
+## 恢复段可以用冲刺取消：挥空之后不该站桩等后摇。
+func test_dash_cancels_attack_recovery() -> void:
+	var m := _make(_attack_profile())
+	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.21, _empty(), true)
+	assert_int(m.attack_phase()).is_equal(LocoActionMachine.ATTACK_PHASE_RECOVERY)
+	var out := m.tick(0.01, _in(0.0, 0.0, false, true), true)
+	assert_int(out.state).override_failure_message(
+			"恢复段的冲刺输入应该取消后摇").is_equal(LocoActionState.DASH)
+
+## 水平边界：一直往右走必须停在墙前，不能走出场地。
+func test_arena_wall_stops_horizontal_movement() -> void:
+	var m := _make()
+	var limit: float = GameConstants.ARENA_HALF_WIDTH - GameConstants.BODY_RADIUS
+	var out: LocoActionOutput = null
+	for i: int in 600:
+		out = m.tick(1.0 / 60.0, _in(1.0, 0.0), true)
+	assert_float(out.plane_pos.x).override_failure_message(
+			"角色走出了场地边界，墙没生效").is_equal_approx(limit, 0.001)
+
+## 空中死亡必须落回地面，不能停在半空。
+func test_dead_actor_settles_to_the_ground() -> void:
+	var m := _make()
+	m.set_height(3.0)
+	var out := m.tick(1.0 / 60.0, _empty(), false)
+	assert_int(out.state).is_equal(LocoActionState.DEAD)
+	for i: int in 120:
+		out = m.tick(1.0 / 60.0, _empty(), false)
+	assert_float(out.height).override_failure_message(
+			"空中死亡的尸体停在半空").is_equal_approx(0.0, 0.001)
+
+## 冲刺位移必须等于 dash_duration × dash_speed，不能多走一帧。
+func test_dash_distance_matches_its_duration() -> void:
+	var m := _make()
+	m.tick(0.0, _in(0.0, 0.0, false, true), true)
+	var out: LocoActionOutput = null
+	for i: int in 60:
+		out = m.tick(1.0 / 60.0, _empty(), true)
+	var expected: float = 16.0 * 0.36
+	assert_float(out.plane_pos.x).override_failure_message(
+			"冲刺多走了或少走了：位移应等于速度 × 时长").is_equal_approx(expected, 0.30)

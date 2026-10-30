@@ -150,3 +150,48 @@ func test_guard_reduces_damage_and_emits_guard_event() -> void:
 	assert_float(result.amount).is_equal_approx(10.0, 0.0001)
 	assert_float(actor.stats.current_hp).is_equal_approx(90.0, 0.0001)
 	assert_int(guarded.size()).is_equal(1)
+
+func _skill_def() -> Dictionary:
+	return {
+		"id": "test_bolt",
+		"template": "melee",
+		"power": 20.0,
+		"cost": 0.0,
+		"cooldown": 1.0,
+		"range": 2.0,
+		"windup": 0.5,
+		"commit": 0.1,
+		"recovery": 0.1,
+	}
+
+## 技能只能在可行动状态起手：攻击/受击中都不行 ——
+## 之前不看状态，能在硬直里放技能，还能把自己攻击的判定帧取消掉。
+func test_skill_cannot_start_during_attack_or_hitstun() -> void:
+	var actor := _runtime(_spec({"skills": [_skill_def()]}), DomainEventBus.new())
+	var attack := LocoInputFrame.empty()
+	attack.attack = true
+	actor.tick_action(GameConstants.TICK_DELTA, attack)
+	assert_int(actor.action.current_state()).is_equal(LocoActionState.ATTACK)
+	assert_bool(actor.try_cast_skill(0, Vector2.ZERO)).override_failure_message(
+			"攻击中不该能起手技能").is_false()
+	assert_int(actor.caster.phase).is_equal(SkillCastPhase.IDLE)
+
+	actor.action.apply_hitstun(0.3, Vector2.ZERO)
+	assert_bool(actor.try_cast_skill(0, Vector2.ZERO)).override_failure_message(
+			"硬直里不该能放技能").is_false()
+
+## 格挡只在地面可行动状态生效：攻击中按住不该白嫖减伤。
+func test_guard_is_ignored_during_attack() -> void:
+	var actor := _runtime(_spec(), DomainEventBus.new())
+	var attack := LocoInputFrame.empty()
+	attack.attack = true
+	actor.tick_action(GameConstants.TICK_DELTA, attack)
+	var guard := LocoInputFrame.empty()
+	guard.guard = true
+	actor.tick_action(GameConstants.TICK_DELTA, guard)
+	assert_int(actor.action.current_state()).is_equal(LocoActionState.ATTACK)
+	assert_bool(actor.is_guarding()).override_failure_message(
+			"攻击中按住格挡不该生效").is_false()
+	var result := actor.take_hit(_request(40.0))
+	assert_bool(result.is_guarded).is_false()
+	assert_float(result.amount).is_equal_approx(40.0, 0.0001)

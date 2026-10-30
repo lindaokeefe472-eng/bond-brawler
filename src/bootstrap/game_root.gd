@@ -60,6 +60,8 @@ var _skills: SkillRepository = null
 var _type_chart: CombatTypeChart = null
 var _session: BattleSession = null
 var _input: InputAdapter = null
+## 这一渲染帧是否跑过物理步。跑过的话输入已经在物理帧锁存过，_process 不能再锁一次。
+var _physics_ticked: bool = false
 var _tuner: HitboxTuner = null
 var _feedback: FeedbackDirector = null
 var _numbers: DamageNumberPool = null
@@ -211,6 +213,9 @@ func _on_flow_toggle_pause() -> void:
 	elif _flow.is_paused():
 		if _flow.resume():
 			get_tree().paused = false
+	# 暂停期间 _process 不跑，锁存里的按下会留到恢复后再放一次，这里丢掉。
+	if _input != null:
+		_input.clear()
 	_flow_view.render(_flow)
 
 func _on_flow_restart() -> void:
@@ -492,6 +497,7 @@ func _create_view(actor_id: int, character_id: String) -> ActorView:
 
 ## 固定步长主循环：累积真实帧时间，按 TICK_DELTA 追赶，最多补 MAX_CATCHUP_TICKS 步。
 func _physics_process(delta: float) -> void:
+	_physics_ticked = false
 	if _session == null:
 		return
 	# 微调时冻结战斗：盒子要在静止画面上量，改完按 F4 继续。
@@ -500,6 +506,10 @@ func _physics_process(delta: float) -> void:
 	# 标题/暂停/结算都不推进战斗。
 	if _flow != null and not _flow.is_playing():
 		return
+	# 输入在物理帧里锁存：事件在物理步之前就 flush 了，这里采样不会多一帧延迟。
+	_physics_ticked = true
+	if _input != null:
+		_input.capture()
 	var max_backlog: float = GameConstants.TICK_DELTA * float(GameConstants.MAX_CATCHUP_TICKS)
 	_accumulator = minf(_accumulator + delta, max_backlog)
 	var steps: int = 0
@@ -527,10 +537,29 @@ func _physics_process(delta: float) -> void:
 				_sync_hud_visibility()
 				_save_now()
 
-## 音频时钟：debounce 依赖它。放在 _process 里，暂停时也跟着停。
+## 音频时钟 + 输入锁存。两者都必须按渲染帧走，不能放进定步长循环：
+## 逻辑步一帧可能跑 0 次（高刷新率）或多次（追赶），顿帧期间更是完全不跑。
 func _process(delta: float) -> void:
+	if _input != null:
+		if _can_sample_input():
+			# 跑过物理步就跳过：just_pressed 整帧都为真，再锁一次会重复触发。
+			if not _physics_ticked:
+				_input.capture()
+		else:
+			_input.clear()
+	_physics_ticked = false
 	if _audio != null:
 		_audio.tick(delta)
+
+## 只有真正在战斗时才收输入。标题/暂停/结算/微调都不该攒按键。
+func _can_sample_input() -> bool:
+	if _session == null:
+		return false
+	if _flow == null or not _flow.is_playing():
+		return false
+	if _tuner != null and _tuner.is_tuning():
+		return false
+	return true
 
 func _sync_views() -> void:
 	for key: Variant in _views.keys():

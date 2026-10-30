@@ -290,8 +290,11 @@ func _apply_knockback(target: ActorRuntime, result: CombatDamageResult) -> void:
 	var cap: float = HITSTUN_PLAYER_CAP if is_player else HITSTUN_ENEMY_CAP
 	var stun: float = clampf(base + kb.length() * 0.02, base, cap)
 	target.action.apply_hitstun(stun, kb)
-	# 霸体 / 无敌 / 硬直免疫时 apply_hitstun 会提前返回，此时仍然要施加击退。
-	if not target.action.is_in_hurt():
+	if target.action.is_in_hurt():
+		# 硬直生效：施法必须被打断，否则前摇挨打还能把技能照常放出来。
+		target.interrupt_cast_on_hitstun()
+	else:
+		# 霸体 / 无敌 / 硬直免疫时 apply_hitstun 会提前返回，此时仍然要施加击退。
 		target.action.set_knockback(kb)
 
 func _stats_provider_for(actors: Dictionary) -> Callable:

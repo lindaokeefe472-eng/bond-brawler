@@ -89,7 +89,7 @@ func _init(p_id: int = 0, p_spec: Dictionary = {}, p_bus: DomainEventBus = null,
 
 	_read_resource_config(p_spec)
 
-	plane_pos = PlaneMath.clamp_lane(_as_vec2(p_spec.get("plane_pos", Vector2.ZERO)))
+	plane_pos = PlaneMath.clamp_arena(_as_vec2(p_spec.get("plane_pos", Vector2.ZERO)))
 	height = maxf(float(p_spec.get("height", 0.0)), 0.0)
 	facing = 1 if int(p_spec.get("facing", 1)) >= 0 else -1
 
@@ -136,7 +136,7 @@ func tick_action(dt: float, input: LocoInputFrame) -> LocoActionOutput:
 
 	_advance_resources(step)
 	# 格挡是「按住」语义，只有能行动时才算数；眩晕/定身期间盾会自然落下。
-	_is_guarding = input != null and input.guard and status.can_act()
+	_is_guarding = input != null and input.guard and status.can_act() and _can_guard()
 	_read_skill_input(input)
 
 	var effective: LocoInputFrame = input
@@ -264,6 +264,8 @@ func take_hit(request: CombatDamageRequest) -> CombatDamageResult:
 func try_cast_skill(slot: int, aim: Vector2) -> bool:
 	if not is_alive() or not status.can_act():
 		return false
+	if not _can_start_action():
+		return false
 	if not caster.can_cast(slot, energy):
 		return false
 	if not caster.begin_cast(slot, aim, facing, energy):
@@ -342,6 +344,31 @@ func is_dead() -> bool:
 
 func is_guarding() -> bool:
 	return _is_guarding
+
+## 格挡只在地面可行动状态生效：攻击/冲刺/受击/施法中按住不该白嫖减伤。
+func _can_guard() -> bool:
+	if action == null:
+		return true
+	match action.current_state():
+		LocoActionState.IDLE, LocoActionState.RUN, LocoActionState.LAND:
+			return true
+	return false
+
+## 能主动起手新动作的状态。攻击/冲刺/受击/施法途中都不行 ——
+## 之前技能不看状态，能在硬直里放技能，还能把自己的攻击判定取消掉。
+func _can_start_action() -> bool:
+	if action == null:
+		return true
+	match action.current_state():
+		LocoActionState.IDLE, LocoActionState.RUN, LocoActionState.LAND, \
+				LocoActionState.JUMP, LocoActionState.FALL:
+			return true
+	return false
+
+## 受击硬直打断施法：前摇被打中，技能不能再照常打出来。
+func interrupt_cast_on_hitstun() -> void:
+	if caster != null:
+		caster.interrupt(&"hitstun")
 
 func hp_ratio() -> float:
 	if stats == null:
@@ -527,7 +554,7 @@ func restore_state(data: Dictionary) -> void:
 		stats.current_hp = clampf(float(data.get("hp", stats.current_hp)), 0.0, stats.max_hp())
 	energy = clampf(float(data.get("energy", energy)), 0.0, _energy_max)
 	stamina = clampf(float(data.get("stamina", stamina)), 0.0, _stamina_max)
-	plane_pos = PlaneMath.clamp_lane(_as_vec2(data.get("plane_pos", plane_pos)))
+	plane_pos = PlaneMath.clamp_arena(_as_vec2(data.get("plane_pos", plane_pos)))
 	height = maxf(float(data.get("height", height)), 0.0)
 	facing = 1 if int(data.get("facing", facing)) >= 0 else -1
 	action.set_plane_pos(plane_pos)

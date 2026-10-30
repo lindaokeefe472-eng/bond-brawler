@@ -134,3 +134,28 @@ func test_player_hitstun_is_shorter_than_enemy() -> void:
 		target.action.tick(GameConstants.TICK_DELTA, LocoInputFrame.empty(), true)
 	assert_bool(target.action.is_in_hurt()).override_failure_message(
 		"玩家硬直超过 0.23 秒，会明显影响操作手感").is_false()
+
+## 受击硬直必须打断施法：否则前摇被打中，技能照常打出来。
+func test_hitstun_interrupts_target_skill_cast() -> void:
+	var bus := DomainEventBus.new()
+	var attacker := _actor(1, GameConstants.FACTION_PLAYER, Vector2.ZERO, bus)
+	var target := _actor(2, GameConstants.FACTION_ENEMY, Vector2(1.5, 0.0), bus)
+	var def := SkillDef.from_dict({
+		"id": "test_bolt", "template": "melee", "power": 20.0, "cost": 0.0,
+		"cooldown": 0.0, "range": 2.0, "windup": 0.5, "commit": 0.1, "recovery": 0.1,
+	})
+	target.caster.equip(0, SkillInstance.new(def))
+	assert_bool(target.try_cast_skill(0, Vector2(1.5, 0.0))).is_true()
+	assert_int(target.caster.phase).is_equal(SkillCastPhase.WINDUP)
+
+	var pipeline := CombatPipeline.new(bus, _rng())
+	pipeline.resolve_basic_attack(attacker, {1: attacker, 2: target}, {
+		"kind": "melee", "range": 2.4, "half_arc": 0.0,
+		"power_ratio": 1.0, "knockback": 0.65,
+		"damage_type": "neutral", "hit_kind": "light",
+	})
+
+	assert_bool(target.action.is_in_hurt()).override_failure_message(
+			"目标应该进入硬直").is_true()
+	assert_int(target.caster.phase).override_failure_message(
+			"硬直没有打断施法，前摇挨打还能把技能放出来").is_equal(SkillCastPhase.IDLE)

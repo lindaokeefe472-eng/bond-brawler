@@ -70,6 +70,9 @@ var _attack_phase: int = ATTACK_PHASE_WINDUP
 var _attack_phase_time: float = 0.0
 var _combo_index: int = 0
 var _combo_timer: float = 0.0
+## 攻击过程中按下的「下一段」。整个攻击窗口内都记住，恢复段一开始就接。
+## 只靠 0.12 秒输入缓冲的话，玩家看见命中（ACTIVE）时按下，等恢复段开始时早已过期。
+var _combo_queued: bool = false
 
 var _buffer: InputBuffer = InputBuffer.new()
 var _prev_jump: bool = false
@@ -97,6 +100,7 @@ func tick(dt: float, input: LocoInputFrame, alive: bool) -> LocoActionOutput:
 
 	if not alive:
 		_enter_dead()
+		_settle_dead(step)
 		return _build_output()
 	if _state == LocoActionState.DEAD:
 		return _build_output()
@@ -121,6 +125,19 @@ func _enter_dead() -> void:
 	_invulnerable_timer = 0.0
 	_hurt_timer = 0.0
 	_skill_timer = 0.0
+	_combo_queued = false
+
+## 死亡后继续下落：空中被打死不该停在半空。横向不再移动。
+func _settle_dead(dt: float) -> void:
+	if _height <= 0.0:
+		_height = 0.0
+		_vertical_velocity = 0.0
+		return
+	_vertical_velocity -= float(_profile.get("gravity", 0.0)) * dt
+	_height += _vertical_velocity * dt
+	if _height <= 0.0:
+		_height = 0.0
+		_vertical_velocity = 0.0
 
 func _update_timers(dt: float) -> void:
 	_invulnerable_timer = maxf(0.0, _invulnerable_timer - dt)
@@ -144,6 +161,10 @@ func _read_input(input: LocoInputFrame) -> void:
 		_buffer.press(InputBuffer.ACTION_DASH)
 	if input.attack and not _prev_attack:
 		_buffer.press(InputBuffer.ACTION_ATTACK)
+		# 攻击中按下 = 预约下一段。等恢复段开始再切，不能立刻切 ——
+		# ACTIVE 还没跑完就切会把自己的判定帧吃掉。
+		if _state == LocoActionState.ATTACK:
+			_combo_queued = true
 	_prev_jump = input.jump
 	_prev_dash = input.dash
 	_prev_attack = input.attack
@@ -229,11 +250,13 @@ func _update_air(input: LocoInputFrame, move: Vector2) -> void:
 # ------------------------------------------------------------------ 冲刺
 func _update_dash(dt: float) -> void:
 	_dash_timer = maxf(0.0, _dash_timer - dt)
-	_velocity = Vector2(float(_facing) * float(_profile.get("dash_speed", 0.0)), 0.0)
 	if _dash_timer > 0.0:
+		_velocity = Vector2(float(_facing) * float(_profile.get("dash_speed", 0.0)), 0.0)
 		return
 
+	# 计时归零的这一拍不能再按冲刺速度走，否则实际位移比 dash_duration 多一帧。
 	_invulnerable_timer = 0.0
+	_velocity = Vector2.ZERO
 	_set_state(LocoActionState.IDLE if not _is_airborne() else LocoActionState.FALL)
 	# 冲刺尾帧允许接攻击/跳跃，避免「冲过去打不到」的断层。
 	if _try_attack():
@@ -268,6 +291,13 @@ func _update_attack(dt: float, move: Vector2) -> void:
 			_finish_attack()
 			return
 
+	# 恢复段：预约的下一段和冲刺取消都在这里生效，不用等后摇播完。
+	if _attack_phase == ATTACK_PHASE_RECOVERY:
+		if _try_combo_chain():
+			return
+		if _try_dash_cancel():
+			return
+
 	# 攻击中不能自由走位，但保留一点位移，让攻击可以微调距离（速度乘 0.2）。
 	var multiplier: float = float(_profile.get("attack_move_multiplier", 0.0))
 	_apply_ground_velocity(move, multiplier)
@@ -292,26 +322,49 @@ func _stage_value(key: String, index: int, fallback: float) -> float:
 		return float(raw)
 	return fallback
 
-func _start_attack() -> void:
+func _start_attack(chain: bool = false) -> void:
 	var combo_count: int = maxi(int(_profile.get("attack_combo_count", 1)), 1)
-	if _combo_timer > 0.0 and _combo_index + 1 < combo_count:
+	if chain and _combo_index + 1 < combo_count:
+		_combo_index += 1
+	elif _combo_timer > 0.0 and _combo_index + 1 < combo_count:
 		_combo_index += 1
 	else:
 		_combo_index = 0
+	_combo_queued = false
 	_combo_timer = 0.0
 	_attack_phase = ATTACK_PHASE_WINDUP
 	_attack_phase_time = 0.0
 	_set_state(LocoActionState.ATTACK)
 
+## 恢复段一开始就接下一段：玩家在看见命中时按下，不该等后摇播完才生效。
+func _try_combo_chain() -> bool:
+	if not _combo_queued:
+		return false
+	var combo_count: int = maxi(int(_profile.get("attack_combo_count", 1)), 1)
+	if _combo_index + 1 >= combo_count:
+		_combo_queued = false
+		return false
+	_start_attack(true)
+	return true
+
+## 后摇可以用冲刺取消：被围住时这是唯一的脱身手段。
+func _try_dash_cancel() -> bool:
+	if not _buffer.is_buffered(InputBuffer.ACTION_DASH, GameConstants.INPUT_BUFFER_WINDOW):
+		return false
+	_buffer.consume(InputBuffer.ACTION_DASH, GameConstants.INPUT_BUFFER_WINDOW)
+	_start_dash()
+	return true
+
 ## recovery 结束：缓冲里的攻击优先接段，其次跳跃、冲刺。
 func _finish_attack() -> void:
+	_combo_queued = false
 	_combo_timer = float(_profile.get("attack_combo_window", 0.0))
 	var combo_count: int = maxi(int(_profile.get("attack_combo_count", 1)), 1)
 	# 直接接下一段，不经过 IDLE，避免状态事件与动画来回抖一下。
 	if _combo_index + 1 < combo_count \
 			and _buffer.is_buffered(InputBuffer.ACTION_ATTACK, GameConstants.INPUT_BUFFER_WINDOW):
 		_buffer.consume(InputBuffer.ACTION_ATTACK, GameConstants.INPUT_BUFFER_WINDOW)
-		_start_attack()
+		_start_attack(true)
 		return
 
 	_set_state(LocoActionState.IDLE if not _is_airborne() else LocoActionState.FALL)
@@ -407,11 +460,9 @@ func _integrate(dt: float) -> void:
 			_height = 0.0
 			_vertical_velocity = 0.0
 			_on_landed()
-		elif _height < 0.0:
-			_height = 0.0
 
 	_plane_pos += _velocity * dt
-	_plane_pos = PlaneMath.clamp_lane(_plane_pos)
+	_plane_pos = PlaneMath.clamp_arena(_plane_pos)
 
 func _on_landed() -> void:
 	_jump_cut_used = false
@@ -437,6 +488,7 @@ func request_skill_lock(duration: float) -> void:
 	_velocity = Vector2.ZERO
 	_combo_timer = 0.0
 	_combo_index = 0
+	_combo_queued = false
 	_set_state(LocoActionState.SKILL)
 
 func apply_hitstun(duration: float, knockback: Vector2) -> void:
@@ -457,6 +509,7 @@ func apply_hitstun(duration: float, knockback: Vector2) -> void:
 	_velocity = knockback
 	_combo_timer = 0.0
 	_combo_index = 0
+	_combo_queued = false
 	_jump_cut_used = true
 	_set_state(LocoActionState.HURT)
 
@@ -484,7 +537,7 @@ func set_super_armor(enabled: bool) -> void:
 	_super_armor = enabled
 
 func set_plane_pos(p: Vector2) -> void:
-	_plane_pos = PlaneMath.clamp_lane(p)
+	_plane_pos = PlaneMath.clamp_arena(p)
 
 ## 供传送/复活/测试改变高度；状态由下一帧的 _refresh_ground_state 自动修正。
 func set_height(value: float) -> void:
