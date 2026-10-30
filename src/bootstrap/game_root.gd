@@ -364,6 +364,14 @@ func _attack_steps(character_id: String) -> Dictionary:
 				for key: Variant in (from_data as Dictionary).keys():
 					entry[key] = (from_data as Dictionary)[key]
 		if not entry.is_empty():
+			# 判定形态默认由图集量出来：sweep = 挥击峰之后武器还扫到身后。
+			# data/melee.json 显式写的 kind 优先，用来推翻自动判别。
+			if not entry.has("kind") and bool(entry.get("sweep", false)):
+				entry["kind"] = "aoe"
+			# 范围段打多远：武器前后扫到的最远距离，和判定盒同源。
+			if str(entry.get("kind", "")) == "aoe" and not entry.has("radius"):
+				entry["radius"] = snappedf(maxf(float(entry.get("reach", 0.0)),
+						float(entry.get("back", 0.0))), 0.01)
 			out[str(step)] = entry
 	return out
 

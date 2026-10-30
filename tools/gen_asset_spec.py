@@ -80,8 +80,9 @@ def main():
             w = float(d.get("windup", windup))
             ac = float(d.get("active", active))
             win = "%.2f~%.2f s" % (w, w + ac) if ac > 0.0 else "-"
-            step_rows.append("| `%s` | %s | %.2f m | %s |" % (
-                slug, step, float(d.get("reach", reach)), win))
+            step_rows.append("| `%s` | %s | %.2f m | %s | %s |" % (
+                slug, step, float(d.get("reach", reach)), win,
+                "绕身" if bool(d.get("sweep", False)) else "近战"))
 
     tail = """
 ## 4. 多层视差背景
@@ -145,9 +146,11 @@ crisp pixel art, 1px outline, limited palette, no shadow (shadow is a separate s
     body = "\n".join(rows) + "\n"
     if step_rows:
         body += ("\n### 3.0 逐段普攻（自动生成）\n\n"
-                 "`ActorRuntime.attack_config(step)` 按段取用；没写 reach 的段退回上表角色级值。\n\n"
-                 "| 角色 | 段 | 前伸 | 判定窗口 |\n"
-                 "|---|---|---|---|\n" + "\n".join(step_rows) + "\n")
+                 "`ActorRuntime.attack_config(step)` 按段取用；没写 reach 的段退回上表角色级值。\n"
+                 "「绕身」= 挥击峰之后武器仍扫到身后（`sweep`），运行时默认按范围攻击结算，\n"
+                 "`data/melee.json` 的 `attacks[step].kind` 可以推翻。\n\n"
+                 "| 角色 | 段 | 前伸 | 判定窗口 | 形态 |\n"
+                 "|---|---|---|---|---|\n" + "\n".join(step_rows) + "\n")
     projectiles = m.get("projectiles", {})
     if projectiles:
         proj_rows = []

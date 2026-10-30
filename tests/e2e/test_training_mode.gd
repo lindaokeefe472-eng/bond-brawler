@@ -166,6 +166,34 @@ func test_ranged_character_is_wired_for_projectiles() -> void:
 	assert_float(float(state["projectile_range"])).override_failure_message(
 			"弹体射程没传上来").is_greater(2.0)
 
+## 判定形态必须来自图集：这些是逐帧核对过的动作，不是手填的猜测。
+## 回归：曾经按「第 3 段一般是范围」手填 kind，armored_axeman / orc_rider 全错位 ——
+## 斧兵的第 2 段才是横扫，骑兵的第 3 段才是，大剑和骑士三段都不是。
+func test_attack_step_shapes_match_the_art() -> void:
+	var runner: GdUnitSceneRunner = scene_runner(TRAINING_SCENE)
+	await runner.simulate_frames(BOOT_FRAMES)
+	var scene: Node = runner.scene()
+	var session: BattleSession = scene.get("_session")
+	var expected: Dictionary = {
+		"armored_axeman": {"1": "melee", "2": "aoe", "3": "melee"},
+		"armored_skeleton": {"1": "melee", "2": "aoe"},
+		"greatsword_skeleton": {"1": "melee", "2": "melee", "3": "melee"},
+		"knight": {"1": "melee", "2": "melee", "3": "melee"},
+		"orc_rider": {"1": "melee", "2": "melee", "3": "aoe"},
+		"elite_orc": {"1": "melee", "2": "aoe", "3": "melee"},
+	}
+	for character_id: String in expected.keys():
+		if str(scene.call("player_character")) != character_id:
+			assert_bool(scene.call("select_player_character", character_id)).is_true()
+			await runner.simulate_frames(2)
+		var player: ActorRuntime = session.get_actor(int(scene.get("_player_id")))
+		assert_object(player).is_not_null()
+		var steps: Dictionary = expected[character_id]
+		for step: String in steps.keys():
+			assert_str(str(player.attack_kind(int(step)))).override_failure_message(
+					"%s 第 %s 段的形态和图集对不上（期望 %s）" % [character_id, step, steps[step]]
+				).is_equal(str(steps[step]))
+
 func _expected_reach(scene: Node, character_id: String) -> float:
 	var manifest: Dictionary = scene.get("_manifest")
 	var characters: Variant = manifest.get("characters", {})

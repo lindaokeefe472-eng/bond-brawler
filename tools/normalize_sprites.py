@@ -128,6 +128,10 @@ def melee_reach(frames, anchor_x, pixel_size):
 
 
 SPRITE_FPS = 12.0
+## 绕身攻击判别：挥击峰之后武器仍伸到身后 >= 1.5 m，且不少于峰值的 60%。
+## 只看峰值之后：蓄力时武器也会举到身后（greatsword 2.11 m），那不是扫到身后。
+SWEEP_MIN_BACK_M = 1.5
+SWEEP_RATIO = 0.6
 
 
 def melee_window(frames, anchor_x, pixel_size, ratio=0.9):
@@ -136,6 +140,8 @@ def melee_window(frames, anchor_x, pixel_size, ratio=0.9):
     判定盒只在 ACTIVE 段亮，而 ACTIVE 段原来写死 0.17~0.27 秒 —— 各角色动画
     长度不同，这一段经常落在「武器还收着」的帧上，看起来就是盒子比武器大一圈。
     这里直接按图集算：前伸 >= 峰值 90% 的帧算判定帧。
+    绕身攻击的判定窗口仍然只覆盖前半圈：伤害是圆形的，身后的目标在第一个
+    判定帧就吃到了，不需要把转体那半圈也算成判定帧（那会把蓄力帧也算进去）。
     """
     extents = []
     for frame in frames:
@@ -149,6 +155,61 @@ def melee_window(frames, anchor_x, pixel_size, ratio=0.9):
         return 0.0, 0.0
     first, last = active[0], active[-1]
     return round(first / SPRITE_FPS, 3), round((last - first + 1) / SPRITE_FPS, 3)
+
+
+def attack_sweep(frames, anchor_x, pixel_size):
+    """这一招是不是绕身范围攻击，返回 (是否绕身, 峰值之后向后伸得最远几米)。
+
+    判据：挥击峰（前伸最大那帧）之后，武器还伸到身后 >= SWEEP_MIN_BACK_M 米，
+    且不少于峰值的 SWEEP_RATIO。正常挥砍打完之后武器回到身前，这个值很小；
+    绕身攻击会把武器继续甩到背后，量出来就是 2 米以上。
+    """
+    series = []
+    for frame in frames:
+        box = frame.getbbox()
+        if box is None:
+            series.append((0.0, 0.0))
+            continue
+        series.append(((box[2] - anchor_x) * pixel_size, (anchor_x - box[0]) * pixel_size))
+    peak = max((front for front, _ in series), default=0.0)
+    if peak <= 0.0:
+        return False, 0.0
+    idx = max(range(len(series)), key=lambda i: series[i][0])
+    after = max((back for _, back in series[idx + 1:]), default=0.0)
+    return after >= SWEEP_MIN_BACK_M and after >= peak * SWEEP_RATIO, round(after, 3)
+
+
+def measure_steps(manifest):
+    """从已归一化的图集回填逐段普攻数据（reach 不动，它由原始图集量出）。
+
+    main() 会就地裁剪图集，所以只能对原始 100px 素材跑一次；这个函数按
+    manifest 里的 frame_size / offset 读当前图集，重算判定窗口与绕身判别。
+    改了判别规则之后跑 `python tools/normalize_sprites.py --measure` 即可。
+    """
+    for slug, entry in sorted(manifest.get("characters", {}).items()):
+        anims = entry.get("animations", {})
+        pixel_size = float(entry.get("pixel_size", 0.0))
+        if pixel_size <= 0.0:
+            continue
+        for step, data in entry.get("attacks", {}).items():
+            key = "attack%d" % int(step)
+            if key not in anims:
+                continue
+            a = anims[key]
+            w, h = int(a["frame_size"][0]), int(a["frame_size"][1])
+            anchor = w * 0.5 - float(a.get("offset", [0.0, 0.0])[0])
+            path = os.path.join(CHARS, slug, a["file"])
+            if not os.path.isfile(path):
+                continue
+            sheet = Image.open(path).convert("RGBA")
+            frames = [sheet.crop((i * w, 0, (i + 1) * w, h)) for i in range(int(a["frames"]))]
+            windup, active = melee_window(frames, anchor, pixel_size)
+            if windup > 0.0 and active > 0.0:
+                data["windup"] = windup
+                data["active"] = active
+            sweep, back = attack_sweep(frames, anchor, pixel_size)
+            data["back"] = back
+            data["sweep"] = sweep
 
 
 def normalize_projectiles(manifest):
@@ -221,6 +282,9 @@ def main():
             if windup > 0.0 and active > 0.0:
                 step_data["windup"] = windup
                 step_data["active"] = active
+            sweep, back = attack_sweep(step_frames, anchor_x, pixel_size)
+            step_data["back"] = back
+            step_data["sweep"] = sweep
             steps[str(step)] = step_data
         if steps:
             entry["attacks"] = steps
@@ -266,4 +330,12 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--measure" in sys.argv:
+        with io.open(MANIFEST, encoding="utf-8") as f:
+            manifest = json.load(f)
+        measure_steps(manifest)
+        with io.open(MANIFEST, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=1)
+        print("manifest updated (measure):", MANIFEST)
+        sys.exit(0)
     sys.exit(main())

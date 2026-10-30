@@ -40,6 +40,8 @@ python -I tools/lint_gdscript.py
 # 角色图和弹体图一起出（弹体在 pack 根目录的 Arrow/Magic(Projectile) 里）
 python tools/build_asset_manifest.py "<Tiny RPG pack>/Characters(100x100)" assets/sprites/characters
 python tools/normalize_sprites.py
+# 只重算逐段判定数据（窗口 / 绕身判别），不重新裁剪图集
+python tools/normalize_sprites.py --measure
 python -I tools/gen_asset_spec.py
 ```
 
@@ -193,18 +195,26 @@ python -I tools/gen_asset_spec.py
 三段连击以前共用第 1 段的参数：前伸、时序、判定形状全都一样，动作播的却是不同的
 挥砍 —— 长枪第三段看着是横扫，判定还是第一段那一下。现在每段可以不同：
 
-- **参数来源**：manifest 的 `attacks[step]`（图集量出来的 `reach` / `windup` / `active`）
-  ← `data/melee.json` 的 `attacks[step]` 覆盖（可写 `kind` / `radius` / `projectile`）。
-  合并后进 spec 的 `melee.attacks`，`GameRoot._attack_steps()` 负责。
+- **参数来源**：manifest 的 `attacks[step]`（图集量出来的 `reach` / `windup` / `active` /
+  `back` / `sweep`）← `data/melee.json` 的 `attacks[step]` 覆盖（`kind` / `radius` /
+  `projectile`）。合并后进 spec 的 `melee.attacks`，`GameRoot._attack_steps()` 负责。
 - **唯一读取口**：`ActorRuntime.attack_config(step)`（`step <= 0` 取当前段），
   基础 `melee_config()` + 逐段覆盖，`reach` 在这里换算成 `range`。
 - **形态 `kind`**：`melee`（扇形，`PlaneMath.in_cone`）/ `aoe`（绕身半径，身后也吃）/
   `ranged`（发弹体）。逐段 `kind` > 角色级 `attack = "projectile"` > `melee`。
   `CombatPipeline.resolve_basic_attack()` 按 `kind` 分派，`ActorView` 的判定盒也跟着变
   （范围段画成以角色为中心的方盒，远程段只标出手点）。
+- **「哪一段是范围」由图集量，不许手猜**：`normalize_sprites.py` 的 `attack_sweep()`
+  取挥击峰（前伸最大那帧）**之后**武器向后伸得最远的米数；≥ 1.5 m 且 ≥ 峰值的 60%
+  才判绕身。只看峰值之后是因为蓄力时武器也举在身后（greatsword 2.11 m），那不是横扫。
+  实测只有 4 段成立：armored_axeman 2 / armored_skeleton 2 / elite_orc 2 / orc_rider 3。
+  **别按「第 3 段一般是范围」手填** —— 之前就是这么错的（knight / greatsword 三段都不是）。
+  改了判别规则后跑 `python tools/normalize_sprites.py --measure` 回填 manifest，
+  不用重跑整条素材流水线（`main()` 会就地裁剪图集，只能对原始素材跑一次）。
 - **动作机**：`attack_windup` / `attack_active` 本来就是数组，按下标取当前段。
 - `data/melee.json` 里 `attacks` 的 `kind` / `radius` 由 `test_melee_data.gd` 校验；
-  合并逻辑和三种形态的判定由 `test_attack_shapes.gd` 盯着。
+  合并逻辑和三种形态的判定由 `test_attack_shapes.gd` 盯着，逐角色形态由
+  `test_training_mode.gd::test_attack_step_shapes_match_the_art` 盯着。
 
 ## 训练场（`scenes/training.tscn`）
 
