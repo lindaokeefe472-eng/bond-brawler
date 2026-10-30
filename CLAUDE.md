@@ -118,26 +118,32 @@ python -I tools/gen_asset_spec.py
 4. 连着挨打要重播受击动画（`ActorView.flash()` 里 `_sprite.restart()`），
    否则 `_last_anim` 已是 hurt，`_update_animation` 会提前返回，动画停在最后一帧。
 
-动作状态机六条（`loco_action_machine.gd`，改之前先读）：
-1. **输入按渲染帧锁存**，不能在逻辑步里直接读 `is_action_just_pressed`：固定步长下
-   逻辑步一帧跑 0 次（高刷新率）或多次（追赶），顿帧 `time_scale=0` 时更是完全不跑，
-   按下会整个消失。`InputAdapter.capture()` 在物理帧开头采一次，`_process` 在本帧
-   没跑物理步时补采一次；`poll()` 消费并清空。物理帧采过就不能再采，`just_pressed`
-   整帧为真，会重复触发。
-2. **输入仲裁：优先级决定顺序，不决定生死。** 本帧没被消费的按下自动转入 `_pending`
-   （最多保留 `PENDING_WINDOW` = 0.8 秒，要盖住最长的一套攻击），解锁后按
-   攻击 > 跳跃 > 冲刺 依次兑现。同一帧按攻击+跳跃 = 先攻击、打完再跳，不会丢。
-   技能不进这个队列（有独立槽位，且受状态门限制）。
-3. **攻击连段是计数队列** `_combo_queue`：攻击期间每按一下加一（上限是剩余段数），
-   恢复段一开始消费一段 —— 连按三下就打三段，不是「有/没有」。恢复段还可以用冲刺取消。
-   0.29~0.46 秒的后摇不可取消会让每一次挥空都像卡住。
-4. **技能只能在可行动状态起手**（IDLE/RUN/LAND/JUMP/FALL）。攻击/冲刺/受击/施法中
-   一律拒绝，硬直还会 `caster.interrupt(&"hitstun")`。否则能在硬直里放技能，
-   还能把自己攻击的判定帧取消掉。
-5. **格挡只在地面可行动状态生效**，攻击/冲刺/受击中按住不白嫖减伤（耐力消耗尚未实现）。
-6. **场地边界用 `PlaneMath.clamp_arena`**：横向夹到 `ARENA_HALF_WIDTH - BODY_RADIUS`，
-   纵深夹到 lane 带。只夹 lane 玩家会一路走出场地。空中死亡继续受重力落地，不能悬空。
-   攻击起手那一帧不继承跑动速度（否则会先滑出 0.1 m）。
+动作状态机（`loco_action_machine.gd`，改之前先读）：
+
+**三层拆分，单一写者。** 读输入 / 决定意图 / 写位移各归一层，不允许互相越界：
+- 输入层 `InputAdapter`：渲染帧锁存按下沿，逻辑步消费。`capture()` 在物理帧开头采一次，
+  `_process` 在本帧没跑物理步时补采一次；`poll()` 消费并清空。物理帧采过就不能再采
+  （`just_pressed` 整帧为真，会重复触发）。
+- 仲裁层 `InputContract` + `IntentArbiter`：每个状态在契约表里声明
+  接受 / 连段 / 预输入 / 丢弃。同帧优先级 **技能 > 冲刺 > 跳跃 > 攻击**，输的键直接丢弃。
+- 运动层 `MotionMode`：只有 FREE（IDLE/RUN/LAND）和 AIR（JUMP/FALL）读方向键；
+  ATTACK/DASH/SKILL/HURT/DEAD 是 SCRIPTED，只执行脚本曲线（lunge / 冲刺 / 击退）。
+  **「攻击期间零位移」是结构保证，不是把系数调成 0。** `attack_move_multiplier` 已删除。
+
+**攻击契约：**
+- 时序按 tick 量化；连段窗口 = [判定段开始, 本段结束]，只保留一个 link 标志，
+  切段即清零 → 任何情况下最多额外出一段。起手阶段的攻击按键直接丢弃。
+- 收招后半段（`recovery * 0.5` 之后）可以被冲刺/跳跃/技能取消；**方向键永远不能取消攻击**。
+- 预输入是**单槽**：只保留「距离可执行时刻 ≤ 9 tick（约 0.15 秒）」的按键，更早的直接丢弃。
+  新按键覆盖旧按键，用后即清。不存在「保留 0.8 秒后自己触发」的幽灵输入。
+- 空中攻击水平速度清零、重力照常；空中冲刺 / 空中技能 v1 不开放。
+- 每段前冲是 `attack_lunge` 数据字段，默认全 0；要加手感时逐段配，不要改回读方向键。
+
+**其它：**
+- 技能只能在 IDLE/RUN/LAND 起手，或攻击收招后半段取消；硬直会 `caster.interrupt(&"hitstun")`。
+- 格挡只在地面可行动状态生效（耐力消耗尚未实现）。
+- 场地边界用 `PlaneMath.clamp_arena`（横向墙 + 纵深带）；空中死亡继续受重力落地。
+- `InputBuffer` / `INPUT_BUFFER_WINDOW` 已删除：0.12 秒时间缓冲短于动作时长，必然丢键。
 
 判定盒（Area3D）四条：
 1. 尺寸/位置由 `melee_config()` 的 range / lane_tolerance / hit_height 现算，
@@ -268,7 +274,7 @@ python -I tools/gen_asset_spec.py
 
 可运行：组合根装配 → 玩家 + 3 个敌人 → 动作状态机 → 技能相位 → 窄相命中 → 伤害管线 →
 打击感反馈（顿帧/震屏/闪白/跳字）→ 波次与存档快照。
-453 个测试（GdUnit4，67 个 suite）全绿，架构检查通过。
+447 个测试（GdUnit4，66 个 suite）全绿，架构检查通过。
 刷怪表和 AI 性格来自 data/stages.json（StageRepository），缺数据时退回内置兜底表。
 训练场是独立场景（TrainingRoot 继承 GameRoot，只重写刷怪），用来量命中范围与伤害。
 HUD 走 presenter + view-model；场景流程（标题/暂停/结算）是纯状态机。

@@ -53,8 +53,6 @@ const TICK_DELTA: float = 1.0 / float(TICK_RATE)
 const MAX_CATCHUP_TICKS: int = 5
 
 # ---------------------------------------------------------------- 输入
-## 输入缓冲窗口（秒）：在动作结束前 N 秒按下会被记住。
-const INPUT_BUFFER_WINDOW: float = 0.12
 ## 土狼时间：离开平台后仍可起跳的宽限。
 const COYOTE_TIME: float = 0.10
 ## 跳跃可变高度：松手时上升速度乘以此系数。

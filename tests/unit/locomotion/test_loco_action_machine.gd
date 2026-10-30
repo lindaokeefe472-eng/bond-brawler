@@ -128,40 +128,26 @@ func test_dash_invulnerability_ignores_hitstun() -> void:
 	assert_float(out.velocity.x).is_equal_approx(16.0, 0.001)
 
 # ---------------------------------------------------------------- 攻击
-func test_attack_chains_combo_with_buffered_input() -> void:
+## 攻击期间按住方向键：零位移（R1）。攻击位移只来自 lunge 曲线，默认 0。
+func test_attack_has_zero_input_driven_movement() -> void:
+	var m := _make({"move_speed": 10.0})
+	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
+	var out: LocoActionOutput = null
+	for i: int in 60:
+		out = m.tick(1.0 / 60.0, _in(1.0, 0.0), true)
+		if out.state != LocoActionState.ATTACK:
+			break
+	assert_float(out.plane_pos.x).override_failure_message(
+			"攻击期间方向键把角色推动了 %.2f m" % out.plane_pos.x).is_equal_approx(0.0, 0.001)
+
+## 起手阶段的攻击按键直接丢弃：连段窗口从判定段才开始。
+func test_attack_press_during_windup_is_discarded() -> void:
 	var m := _make(_attack_profile())
 	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
-	assert_int(m.current_state()).is_equal(LocoActionState.ATTACK)
-	assert_int(m.combo_index()).is_equal(0)
-	m.tick(0.25, _empty(), true)
-	assert_int(m.attack_phase()).is_equal(LocoActionMachine.ATTACK_PHASE_RECOVERY)
-	var out := m.tick(0.06, _in(0.0, 0.0, false, false, true), true)
-	assert_int(out.state).is_equal(LocoActionState.ATTACK)
+	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.01, _empty(), true)
 	assert_int(m.combo_index()).override_failure_message(
-		"recovery 结束前 0.12 秒内的攻击应自动接段").is_equal(1)
-
-func test_attack_combo_resets_after_window() -> void:
-	var profile := _attack_profile()
-	profile["attack_combo_window"] = 0.2
-	var m := _make(profile)
-	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
-	m.tick(0.25, _empty(), true)
-	m.tick(0.06, _in(0.0, 0.0, false, false, true), true)
-	assert_int(m.combo_index()).is_equal(1)
-	m.tick(0.31, _empty(), true)
-	assert_int(m.current_state()).is_equal(LocoActionState.IDLE)
-	m.tick(0.25, _empty(), true)
-	assert_int(m.combo_index()).override_failure_message("窗口过期后连段应重置").is_equal(0)
-	var out := m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
-	assert_int(out.state).is_equal(LocoActionState.ATTACK)
-	assert_int(m.combo_index()).override_failure_message("重置后应从第一段开始").is_equal(0)
-
-func test_attack_slows_movement_to_multiplier() -> void:
-	var m := _make({"move_speed": 10.0, "attack_move_multiplier": 0.2})
-	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
-	var out := m.tick(0.05, _in(1.0, 0.0), true)
-	assert_int(out.state).is_equal(LocoActionState.ATTACK)
-	assert_float(out.velocity.x).is_equal_approx(2.0, 0.001)
+			"起手阶段的攻击不该被预约成连段").is_equal(0)
 
 func test_attack_phases_advance_in_order() -> void:
 	var m := _make(_attack_profile())
@@ -311,8 +297,8 @@ func test_hitstun_ignored_during_invulnerability() -> void:
 	m.apply_hitstun(0.2, Vector2.ZERO)
 	assert_int(m.current_state()).is_equal(LocoActionState.DASH)
 
-# ---------------------------------------------------------------- 连段 / 取消 / 边界
-## ACTIVE 里按下的下一段也要算数：玩家看见命中就按，等 0.12 秒缓冲过期就太晚了。
+# ---------------------------------------------------------------- 连段 / 取消 / 仲裁
+## 判定段里按的攻击在收招开始时接下一段。
 func test_attack_pressed_during_active_chains_at_recovery() -> void:
 	var m := _make(_attack_profile())
 	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
@@ -322,19 +308,52 @@ func test_attack_pressed_during_active_chains_at_recovery() -> void:
 	var out := m.tick(0.1, _empty(), true)
 	assert_int(out.state).is_equal(LocoActionState.ATTACK)
 	assert_int(m.combo_index()).override_failure_message(
-			"ACTIVE 里按下的下一段应该在恢复段开始时接上").is_equal(1)
-	assert_int(m.attack_phase()).override_failure_message(
-			"接段后应该从新一段的起手帧开始").is_equal(LocoActionMachine.ATTACK_PHASE_WINDUP)
+			"判定段里按下的攻击应该在收招开始时接上").is_equal(1)
+	assert_int(m.attack_phase()).is_equal(LocoActionMachine.ATTACK_PHASE_WINDUP)
 
-## 恢复段可以用冲刺取消：挥空之后不该站桩等后摇。
+## 收招里按的攻击立即接下一段，不等后摇播完。
+func test_attack_pressed_during_recovery_chains_immediately() -> void:
+	var m := _make(_attack_profile())
+	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.25, _empty(), true)
+	assert_int(m.attack_phase()).is_equal(LocoActionMachine.ATTACK_PHASE_RECOVERY)
+	var out := m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	assert_int(out.state).is_equal(LocoActionState.ATTACK)
+	assert_int(m.combo_index()).is_equal(1)
+
+## 连段只保留一个标志：多按几次也最多额外出一段（R3）。
+func test_combo_link_only_adds_one_segment() -> void:
+	var m := _make(_attack_profile())
+	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.11, _empty(), true)
+	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.01, _empty(), true)
+	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.01, _empty(), true)
+	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	var seen: Array[int] = []
+	for i: int in 80:
+		var out := m.tick(0.01, _empty(), true)
+		if out.state == LocoActionState.ATTACK \
+				and (seen.is_empty() or seen[seen.size() - 1] != m.combo_index()):
+			seen.append(m.combo_index())
+	assert_array(seen).override_failure_message(
+			"多按几次也只该额外出一段，实际 %s" % str(seen)).is_equal([0, 1])
+
+## 恢复段后半段可以用冲刺取消；前半段按下则先存入预输入，到窗口再兑现。
 func test_dash_cancels_attack_recovery() -> void:
 	var m := _make(_attack_profile())
 	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
 	m.tick(0.21, _empty(), true)
 	assert_int(m.attack_phase()).is_equal(LocoActionMachine.ATTACK_PHASE_RECOVERY)
-	var out := m.tick(0.01, _in(0.0, 0.0, false, true), true)
+	var out: LocoActionOutput = null
+	m.tick(0.01, _in(0.0, 0.0, false, true), true)
+	for i: int in 20:
+		out = m.tick(0.01, _empty(), true)
+		if out.state == LocoActionState.DASH:
+			break
 	assert_int(out.state).override_failure_message(
-			"恢复段的冲刺输入应该取消后摇").is_equal(LocoActionState.DASH)
+			"恢复段后半段的冲刺应该取消后摇").is_equal(LocoActionState.DASH)
 
 ## 水平边界：一直往右走必须停在墙前，不能走出场地。
 func test_arena_wall_stops_horizontal_movement() -> void:
@@ -368,63 +387,39 @@ func test_dash_distance_matches_its_duration() -> void:
 	assert_float(out.plane_pos.x).override_failure_message(
 			"冲刺多走了或少走了：位移应等于速度 × 时长").is_equal_approx(expected, 0.30)
 
-# ---------------------------------------------------------------- 输入仲裁
-## 连按三下就该打三段：连段队列是计数，不是「有/没有」。
-func test_mashing_attack_during_first_hit_plays_three_steps() -> void:
-	var m := _make(_attack_profile())
-	# 连按 = 按一下松一下，只认按下沿；按住不放不算新的一次。
-	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
-	m.tick(0.01, _empty(), true)
-	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
-	m.tick(0.01, _empty(), true)
-	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
-	var seen: Array[int] = []
-	for i: int in 100:
-		var out := m.tick(0.01, _empty(), true)
-		if out.state == LocoActionState.ATTACK \
-				and (seen.is_empty() or seen[seen.size() - 1] != m.combo_index()):
-			seen.append(m.combo_index())
-	assert_array(seen).override_failure_message(
-			"连按三下应该依次打出第 1/2/3 段，实际 %s" % str(seen)).is_equal([0, 1, 2])
-
-## 起手阶段按的冲刺不能丢：后摇一开始就兑现。
-func test_dash_pressed_during_windup_cancels_at_recovery() -> void:
-	var m := _make(_attack_profile())
-	m.tick(0.0, _in(0.0, 0.0, false, false, true), true)
-	m.tick(0.01, _in(0.0, 0.0, false, true), true)
-	var out: LocoActionOutput = null
-	for i: int in 30:
-		out = m.tick(0.01, _empty(), true)
-		if out.state == LocoActionState.DASH:
-			break
-	assert_int(out.state).override_failure_message(
-			"起手阶段按下的冲刺应该在后摇开始时兑现").is_equal(LocoActionState.DASH)
-
-## 同一帧按攻击+跳跃：先攻击，跳跃在攻击结束后兑现，不能吞掉。
-func test_jump_pressed_with_attack_fires_after_the_attack() -> void:
+# ---------------------------------------------------------------- 同帧优先级 / 预输入
+## 同一帧按攻击+跳跃：跳跃优先（逃生类），攻击丢弃。
+func test_jump_wins_over_attack_in_the_same_tick() -> void:
 	var m := _make(_attack_profile())
 	var out := m.tick(0.0, _in(0.0, 0.0, true, false, true), true)
-	assert_int(out.state).is_equal(LocoActionState.ATTACK)
-	for i: int in 60:
-		out = m.tick(0.01, _empty(), true)
-		if out.state == LocoActionState.JUMP:
-			break
 	assert_int(out.state).override_failure_message(
-			"攻击结束后应该起跳，而不是把跳跃吞掉").is_equal(LocoActionState.JUMP)
+			"同一帧按攻击+跳跃应该先起跳").is_equal(LocoActionState.JUMP)
+	assert_int(m.combo_index()).is_equal(0)
 
-## 冲刺中按的攻击不能丢：冲刺结束就出手。
-func test_attack_pressed_during_dash_fires_when_dash_ends() -> void:
+## 冲刺中按的攻击：只有距离冲刺结束不超过 9 tick 才保留，冲刺结束兑现。
+func test_attack_buffered_near_dash_end_fires() -> void:
 	var m := _make(_attack_profile())
 	m.tick(0.0, _in(0.0, 0.0, false, true), true)
-	assert_int(m.current_state()).is_equal(LocoActionState.DASH)
-	m.tick(0.05, _in(0.0, 0.0, false, false, true), true)
+	m.tick(0.30, _empty(), true)
 	var out: LocoActionOutput = null
-	for i: int in 40:
+	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	for i: int in 20:
 		out = m.tick(0.01, _empty(), true)
 		if out.state == LocoActionState.ATTACK:
 			break
 	assert_int(out.state).override_failure_message(
-			"冲刺中按下的攻击应该在冲刺结束后出手").is_equal(LocoActionState.ATTACK)
+			"冲刺末尾按下的攻击应该在冲刺结束后出手").is_equal(LocoActionState.ATTACK)
+
+## 冲刺一开始就按攻击：距离结束太远，直接丢弃，不能留到后面诈尸。
+func test_attack_pressed_early_in_dash_is_discarded() -> void:
+	var m := _make(_attack_profile())
+	m.tick(0.0, _in(0.0, 0.0, false, true), true)
+	m.tick(0.01, _in(0.0, 0.0, false, false, true), true)
+	var out: LocoActionOutput = null
+	for i: int in 40:
+		out = m.tick(0.01, _empty(), true)
+	assert_int(out.state).override_failure_message(
+			"冲刺早期按下的攻击不该在冲刺结束后自己触发").is_not_equal(LocoActionState.ATTACK)
 
 ## 攻击起手那一帧不能继承跑动全速：否则会先滑出 0.1 m。
 func test_attack_start_tick_does_not_lurch_at_full_speed() -> void:

@@ -264,7 +264,8 @@ func take_hit(request: CombatDamageRequest) -> CombatDamageResult:
 func try_cast_skill(slot: int, aim: Vector2) -> bool:
 	if not is_alive() or not status.can_act():
 		return false
-	if not _can_start_action():
+	# 地面可行动状态起手；攻击的恢复段后半段也可以取消成技能。
+	if not _can_start_action() and not action.can_cancel_into_skill():
 		return false
 	if not caster.can_cast(slot, energy):
 		return false
@@ -354,14 +355,13 @@ func _can_guard() -> bool:
 			return true
 	return false
 
-## 能主动起手新动作的状态。攻击/冲刺/受击/施法途中都不行 ——
-## 之前技能不看状态，能在硬直里放技能，还能把自己的攻击判定取消掉。
+## 能主动起手新动作的状态：只有地面可行动状态。
+## 空中技能/空中冲刺 v1 不开放；攻击/受击/施法途中一律拒绝。
 func _can_start_action() -> bool:
 	if action == null:
 		return true
 	match action.current_state():
-		LocoActionState.IDLE, LocoActionState.RUN, LocoActionState.LAND, \
-				LocoActionState.JUMP, LocoActionState.FALL:
+		LocoActionState.IDLE, LocoActionState.RUN, LocoActionState.LAND:
 			return true
 	return false
 
